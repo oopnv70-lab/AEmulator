@@ -195,6 +195,8 @@ object InitPlan {
         "aoservice", "displayengine-hal-1-2", "display-hal-1-2", "hwfs-hal-1-0", "uniperf-hal-1-0",
         "light-ext-hal-2-0", "motion-hal-1-0", "power-hw-hal-1-0", "sensors-hal-1-2_hw", "sop-hal-1-0",
         "tp-hal-1-0", "sensorscal-hal-1-0", "vendor-qti-media-c2-hal-1-0", "qteeconnector-hal-1-0",
+        "vendor.sensors-hal-2-0-multihal", "vendor.usb-hal-1-2", "display-color-hal-1-0",
+        "vendor.atrace-hal-1-0", "vendor.boot-hal-1-1", "vendor.cas-hal-1-2", "vendor.memtrack-hal-1-0",
     )
     private val SKIP_BIN = setOf(
         "logwrapper", "sh", "rild", "vold", "wpa_supplicant", "dhcpcd", "bluetoothd", "hciattach", "btld", "adbd",
