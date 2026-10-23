@@ -694,6 +694,20 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
 
     val glInApp: Boolean get() = engine == Engine.KK && GlBridge.running()
 
+    /**
+     * run/skip-services: one service name (or a substring of it) per line, # comments allowed. The service is not
+     * started and is never restarted by the watchdog — the first tool for a vendor firmware whose hardware HALs
+     * (audio, c2, perf, motion, sensors, TEE…) only crash in the emulator. Test by editing the file on the phone,
+     * no rebuild needed; the file is re-read at every service start. Once the right list is known, put those names
+     * into InitPlan.SKIP for good.
+     */
+    private fun userSkips(): List<String> =
+        File(paths.bin, "skip-services").takeIf { it.isFile }?.readLines()
+            ?.map { it.trim() }?.filter { it.isNotEmpty() && !it.startsWith("#") }.orEmpty()
+
+    private fun skippedByUser(svc: GuestService): Boolean =
+        userSkips().any { svc.name == it || svc.name.contains(it) }
+
     private fun startService(svc0: GuestService, propsFile: File? = null) {
         // The second zygote is of the other word size than the first. A firmware that ships all three zygote rc files
         // and does not name one (GSI 10: no ro.zygote) can leave both 64-bit in the plan - then 32-bit apps have no
@@ -707,6 +721,10 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
             svc0.copy(argv = listOf("/system/bin/app_process32") + svc0.argv.drop(1)) else svc0
         if (!File(paths.root, svc.argv.first().removePrefix("/")).isFile) {
             log("· ${svc.name}: ${svc.argv.first()} missing, skipping")
+            return
+        }
+        if (skippedByUser(svc)) {
+            log("· ${svc.name}: skipped by run/skip-services")
             return
         }
         if (engine == Engine.N64 && ((svc.name == "zygote_secondary" && !n64Has32) || svc.argv.first().substringAfterLast('/') in N64_SKIP)) return
@@ -1083,6 +1101,8 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
                     val n = restarts.getOrDefault(name, 0)
                     val svc = img.services.firstOrNull { it.name == name }
                         ?: if (name.contains("-hal-") && n < 3) servicePlan().firstOrNull { it.name == name } else null
+                    // services the user switched off through run/skip-services: never restart
+                    if (svc != null && skippedByUser(svc)) { synchronized(procs) { procs.remove(name) }; continue }
                     // init restarts surfaceflinger and then zygote ("onrestart restart zygote"); without that a
                     // crashed compositor leaves the last frame on screen forever
                     if (name == "surfaceflinger" && svc != null && bootDoneAt > 0 && n < 12) {
