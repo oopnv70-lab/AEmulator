@@ -1130,6 +1130,17 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
                     if (svc != null && (svc.restart || name in ALWAYS_RESTART || hal) && code != 137 && code != 143 && n < 12) {
                         restarts[name] = n + 1
                         log("service $name crashed (code $code), restarting (${n + 1}/12)")
+                        // Honor MagicOS: netd exits with code 1 and without a guest-log dump the reason stays hidden;
+                        // show the guest's own last records right in the app's log page.
+                        if (name == "netd" && n < 3) {
+                            runCatching {
+                                val tail = GuestLog.tail(paths.root, 32 * 1024)
+                                if (tail.isNotEmpty()) {
+                                    log("-- guest log around netd crash (last ${tail.size}) --")
+                                    for (rec in tail.takeLast(80)) log("  ${rec.prio}/${rec.tag}: ${rec.msg.take(160)}")
+                                }
+                            }.onFailure { log("-- guest log unreadable: ${it.message} --") }
+                        }
                         synchronized(procs) { procs.remove(name) }
                         runCatching { startService(svc) }
                     } else synchronized(procs) { procs.remove(name) }
