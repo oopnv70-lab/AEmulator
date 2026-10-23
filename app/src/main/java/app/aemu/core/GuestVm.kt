@@ -1132,7 +1132,7 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
                         log("service $name crashed (code $code), restarting (${n + 1}/12)")
                         // Honor MagicOS: netd exits with code 1 and without a guest-log dump the reason stays hidden;
                         // show the guest's own last records right in the app's log page.
-                        if (name == "netd" && n < 3) {
+                        if (name == "netd" && n < 6) {
                             runCatching {
                                 val tail = GuestLog.tail(paths.root, 32 * 1024)
                                 if (tail.isNotEmpty()) {
