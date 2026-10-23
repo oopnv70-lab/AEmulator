@@ -1076,6 +1076,15 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
                             if (code == 137 && guestLogHas("No original dex files found"))
                                 failure = "system_server cannot start: the precompiled code of the framework (system/framework/oat) is missing from this container — import the firmware again"
                             log("✖ $failure"); setState(State.FAILED)
+                            // Honor MagicOS: dump the guest's own last records so the real reason of the system_server
+                            // death is visible right in the app's log page, no adb/logcat needed.
+                            runCatching {
+                                val tail = GuestLog.tail(paths.root, 64 * 1024)
+                                if (tail.isNotEmpty()) {
+                                    log("-- guest log (last ${tail.size}) --")
+                                    for (rec in tail.takeLast(120)) log("  ${rec.prio}/${rec.tag}: ${rec.msg.take(180)}")
+                                }
+                            }.onFailure { log("-- guest log unreadable: ${it.message} --") }
                         } else if (plannedRestart) {
                             plannedRestart = false
                             killZygoteChildren()

@@ -190,6 +190,11 @@ object InitPlan {
         "mfgloader", "wlandutservice", "bt_dut_cmd", "bootanim", "samsungani", "playsound", "sdcard", "fuse_sdcard0",
         "healthd", "logd", "lmkd", "watchdogd", "ril-daemon1", "ril-daemon2", "fota", "gpsd", "sensors", "akmd",
         "rmt_storage", "qmuxd", "netmgrd", "thermald", "mpdecision", "thermal-engine", "time_daemon", "diag",
+        // Honor MagicOS (Android 12): vendor HALs that only poll real hardware (TEE, DSP, sensors, display engine…)
+        // and exit by themselves in the emulator; started they only spam the log and disturb system_server's boot.
+        "aoservice", "displayengine-hal-1-2", "display-hal-1-2", "hwfs-hal-1-0", "uniperf-hal-1-0",
+        "light-ext-hal-2-0", "motion-hal-1-0", "power-hw-hal-1-0", "sensors-hal-1-2_hw", "sop-hal-1-0",
+        "tp-hal-1-0", "sensorscal-hal-1-0", "vendor-qti-media-c2-hal-1-0", "qteeconnector-hal-1-0",
     )
     private val SKIP_BIN = setOf(
         "logwrapper", "sh", "rild", "vold", "wpa_supplicant", "dhcpcd", "bluetoothd", "hciattach", "btld", "adbd",
