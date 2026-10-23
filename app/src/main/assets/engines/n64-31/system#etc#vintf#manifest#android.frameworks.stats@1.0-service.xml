@@ -1,0 +1,9 @@
+<manifest version="1.0" type="framework">
+    <hal format="aidl">
+        <name>android.frameworks.stats</name>
+        <interface>
+            <name>IStats</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+</manifest>
