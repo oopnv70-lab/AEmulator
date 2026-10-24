@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launcher_config>
+    <item name="config_IconTitleSize">10.5</item>
+    <item name="config_IconTitleShadow">5.0,0.0,3.0,ff000000</item>
+</launcher_config>
