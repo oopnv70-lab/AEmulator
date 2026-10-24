@@ -1313,12 +1313,10 @@ class TreeFixer(
         val perms = listOf("system/etc/permissions", "system_ext/etc/permissions", "product/etc/permissions", "vendor/etc/permissions")
             .flatMap { d -> File(root, d).listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".xml") } }
         if (perms.isEmpty()) return
-        val decl = Regex("<library\s+name=\"([^\"]+)\"\s+file=\"([^\"]+)\"")
         for (f in perms) {
             val text = runCatching { f.readText() }.getOrNull() ?: continue
             var fixed = 0
-            for (m in decl.findAll(text)) {
-                val file = m.groupValues[2]
+            for (file in libraryFiles(text)) {
                 val dst = File(root, file.removePrefix("/"))
                 if (dst.exists()) continue
                 val base = file.substringAfterLast('/')
@@ -1333,7 +1331,26 @@ class TreeFixer(
             if (fixed > 0) log("${f.name}: $fixed shared library jar(s) put where the declaration looks for them")
         }
     }
-
+    /** The "file" attribute of every &lt;library&gt; element of a permissions file, parsed by hand. */
+    private fun libraryFiles(text: String): List<String> {
+        val out = ArrayList<String>()
+        var i = text.indexOf("<library")
+        while (i >= 0) {
+            val end = text.indexOf('>', i).let { if (it < 0) text.length else it }
+            val tag = text.substring(i, end)
+            val at = tag.indexOf("file=")
+            if (at >= 0) {
+                val q = tag.indexOf('"', at).let { if (it < 0) tag.indexOf('\'', at) else it }
+                if (q >= 0) {
+                    val quote = tag[q]
+                    val close = tag.indexOf(quote, q + 1)
+                    if (close > q) out.add(tag.substring(q + 1, close))
+                }
+            }
+            i = text.indexOf("<library", end)
+        }
+        return out
+    }
     /**
      * The aconfig flag storage (Kernel64.aconfigStorage), as aconfigd leaves it: /metadata/aconfig/maps/<container>.
      * package.map and .flag.map, /metadata/aconfig/boot/<container>.val and .info, copied from <partition>/etc/aconfig
