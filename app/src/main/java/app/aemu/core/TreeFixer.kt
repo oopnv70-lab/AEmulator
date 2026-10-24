@@ -116,6 +116,7 @@ class TreeFixer(
         fixThemeXml()
         parkWhetstone()
         parkQcomServices()
+        parkQtiCameraProvider()
         swapMtkAudioHal()
         eglConfig(img.settings.gpu)
         makeDataDirs()
@@ -335,6 +336,31 @@ class TreeFixer(
             if (f.renameTo(dst)) n++
         }
         if (n > 0) log("Qualcomm: vendor services set aside: $n")
+    }
+
+    /**
+     * Honor MagicOS 17 (API 37): the QTI AIDL camera provider registers
+     * android.hardware.camera.provider.ICameraProvider/vendor_qti/0 and then dies with SIGSEGV (code 139) while its
+     * camx stack initialises against hardware that is not there. Its rc makes it restart and its manifest fragment
+     * makes system_server wait for that name, so the engine's own HIDL camera-provider-2-4 never becomes the guest's
+     * camera source. Set the QTI AIDL provider and its rc aside; the engine HIDL provider (camera-provider-2-4) keeps
+     * its own manifest fragment and serves the guest.
+     */
+    private fun parkQtiCameraProvider() {
+        if (engine != Engine.N64) return
+        val parked = File(root, "system/.aemu-parked").apply { mkdirs() }
+        for (rel in listOf(
+            "vendor/bin/hw/vendor.qti.camera.provider-service_64",
+            "vendor/etc/init/vendor.qti.camera.provider-service_64.rc",
+            "vendor/lib64/camx.provider-impl.so",
+            "vendor/lib64/camx.device-impl.so",
+        )) {
+            val f = File(root, rel)
+            if (!f.exists() && !isLink(f)) continue
+            val dst = File(parked, rel.replace('/', '#'))
+            if (dst.exists()) ImageStore.wipe(dst)
+            if (f.renameTo(dst)) log("QTI AIDL camera provider set aside (${f.name})")
+        }
     }
 
     /** Native arm64 engine: its HALs and libraries are arm64 files from assets/engines/n64-<kernel> (each kernel has its own copy), named "a#b#c" for a/b/c. */
