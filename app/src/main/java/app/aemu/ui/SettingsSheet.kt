@@ -54,6 +54,7 @@ private val RESOLUTIONS = listOf(
 )
 
 private val RAM_STEPS = listOf(0, 256, 512, 768, 1024, 1536, 2048, 3072, 4096)
+private val FREE_GB_STEPS = listOf(0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
 
 @Composable
 fun SettingsSheet(img: GuestImage, onDismiss: () -> Unit, onSave: (VmSettings) -> Unit) {
@@ -120,6 +121,18 @@ fun SettingsSheet(img: GuestImage, onDismiss: () -> Unit, onSave: (VmSettings) -
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             Toggle(stringResource(R.string.vs_lowram), stringResource(R.string.vs_lowram_sub), s.lowRam) { s = s.copy(lowRam = it) }
+            val freeIdx = FREE_GB_STEPS.indexOf(s.freeGb).coerceAtLeast(0)
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.vs_free_space)) },
+                supportingContent = {
+                    Column {
+                        Text(if (s.freeGb == 0) stringResource(R.string.vs_free_space_auto) else "${s.freeGb} GB")
+                        Slider(value = freeIdx.toFloat(), onValueChange = { s = s.copy(freeGb = FREE_GB_STEPS[it.toInt()]) },
+                            valueRange = 0f..FREE_GB_STEPS.lastIndex.toFloat(), steps = FREE_GB_STEPS.size - 2)
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
             Toggle(stringResource(R.string.vs_proxy), stringResource(R.string.vs_proxy_sub), s.netProxy) { s = s.copy(netProxy = it) }
 
             Spacer(Modifier.height(8.dp))

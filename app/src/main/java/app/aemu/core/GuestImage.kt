@@ -37,6 +37,8 @@ data class VmSettings(
     val legacyEngine: Boolean = false,
     /** guest RAM budget in MB, 0 = automatic */
     val ramMb: Int = 0,
+    /** free space in GB the guest reports (statfs), 0 = host's real value */
+    val freeGb: Int = 32,
     /** emulate the radio (RIL); off = tablet-like firmware without telephony */
     val radio: Boolean = true,
     /** hardware 32-bit (AArch32 EL0) bypass without translator on supported CPUs */
@@ -52,7 +54,7 @@ data class VmSettings(
         .put("touchHz", touchHz).put("netProxy", netProxy).put("lowRam", lowRam)
         .put("showFrame", showFrame).put("showNavBar", showNavBar).put("navKeys", navKeys).put("navSize", navSize)
         .put("keepScreenOn", keepScreenOn).put("showLed", showLed).put("mtMode", mtMode).put("legacyEngine", legacyEngine)
-        .put("ramMb", ramMb).put("radio", radio).put("native32", native32).put("imei", imei).put("qemuArgs", qemuArgs)
+        .put("ramMb", ramMb).put("freeGb", freeGb).put("radio", radio).put("native32", native32).put("imei", imei).put("qemuArgs", qemuArgs)
 
     companion object {
         const val NAV_DEFAULT = "back,home,recents,menu"
@@ -93,6 +95,7 @@ data class VmSettings(
                 mtMode = o.optInt("mtMode", d.mtMode),
                 legacyEngine = o.optBoolean("legacyEngine", false),
                 ramMb = o.optInt("ramMb", 0),
+                freeGb = o.optInt("freeGb", 32),
                 radio = o.optBoolean("radio", true),
                 native32 = o.optBoolean("native32", false),
                 imei = o.optString("imei", ""),

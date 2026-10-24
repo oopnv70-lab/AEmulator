@@ -92,6 +92,7 @@ static u64 g_logdev, g_logino;      // the service log on descriptor 2 (a file o
 static int g_logpipe;
 static u64 g_inino;                 // ...and the pipe on descriptor 0
 static char g_sd[512]; static u64 g_sdlen;   // the shared card folder on the phone (AEMU64_SDCARD)
+static u64 g_free_gb;                       // free space in GB the guest is shown (AEMU64_FREE_GB)
 static int g_is32;                // this process is qemu-arm running a 32-bit program
 static void (*g_fatal[32])(int, void *, void *);
 static void fatal_relay(int sig, void *info, void *uc);
@@ -1048,6 +1049,20 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             *(u64 *)a[1] = 0xf97cff8cUL;
             return 0;
         }
+        if (g_free_gb && a[1]) {            // the guest's disk size is the value chosen in the image's settings
+            u64 gb = g_free_gb << 30;       // blocks of 4096: blocks = gb / 4k
+            memset((void *)a[1], 0, 120);
+            *(i64 *)a[1] = 0x01021997;      // EXT4_SUPER_MAGIC
+            *(i64 *)((char *)a[1] + 8) = 4096;                    // f_bsize
+            *(u64 *)((char *)a[1] + 16) = gb / 4096;              // f_blocks
+            *(u64 *)((char *)a[1] + 24) = gb / 4096;              // f_bfree
+            *(u64 *)((char *)a[1] + 32) = gb / 4096;              // f_bavail
+            *(u64 *)((char *)a[1] + 40) = gb / 4096 / 16;         // f_files
+            *(u64 *)((char *)a[1] + 48) = gb / 4096 / 16;         // f_ffree
+            *(u64 *)((char *)a[1] + 64) = 255;                    // f_namelen
+            *(u64 *)((char *)a[1] + 72) = 4096;                   // f_frsize
+            return 0;
+        }
         /* fallthrough */
     case NR_truncate: case NR_chdir:
     case NR_setxattr: case NR_lsetxattr: case NR_getxattr: case NR_lgetxattr: case NR_listxattr: case NR_llistxattr:
@@ -1749,6 +1764,7 @@ void aemu_main(u64 *sp) {
     g_crash = env_get(envp, "AEMU64_CRASH") != 0;
     if ((r = env_get(envp, "AEMU64_INPUT")) && slen(r) < sizeof g_input) memcpy(g_input, r, slen(r) + 1);
     if ((r = env_get(envp, "AEMU64_SDCARD")) && slen(r) < sizeof g_sd) { g_sdlen = slen(r); memcpy(g_sd, r, g_sdlen + 1); }
+    if ((r = env_get(envp, "AEMU64_FREE_GB"))) g_free_gb = atou(r);
     if ((r = env_get(envp, "AEMU64_QEMU")) && slen(r) < sizeof g_qemu) memcpy(g_qemu, r, slen(r) + 1);
     if ((r = env_get(envp, "AEMU64_BINDER")) && slen(r) < sizeof g_bsock) memcpy(g_bsock, r, slen(r) + 1);
     if ((r = env_get(envp, "AEMU64_HWBINDER")) && slen(r) < sizeof g_hwbsock) memcpy(g_hwbsock, r, slen(r) + 1);
