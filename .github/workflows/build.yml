@@ -32,6 +32,14 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Rebuild aemu-stubs.jar from source
+        run: |
+          cd native/gueststubs
+          chmod +x build.sh
+          ./build.sh
+          cd ../..
+          git diff --stat app/src/main/assets/engines/kk/aemu-stubs.jar
+
       - name: Build debug APKs
         run: ./gradlew --no-daemon :app:assembleV0003Debug
 
