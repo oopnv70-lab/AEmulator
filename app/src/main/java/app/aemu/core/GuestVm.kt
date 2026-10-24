@@ -539,6 +539,46 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
             val (code, out) = r.run(listOf("/" + kernel.linkerConfigTool, "--target", "/linkerconfig"), 30_000,
                 if (own != null) mapOf("AEMU64_PROPS_FILE" to own.absolutePath) else emptyMap())
             if (code != 0 || !File(paths.root, "linkerconfig/ld.config.txt").isFile) log("linkerconfig: exit $code ${out.trim().let { if (it.length > 700) it.take(400) + " ... " + it.takeLast(300) else it }}")
+            // The generator writes /vendor/framework, /vendor/app and /vendor/priv-app into the default
+            // namespace, but not the vendor's library directories - on a Treble device those belong to the
+            // "sphal" namespace, which is the one ro.hardware names. The engine's graphics HALs live in
+            // vendor/lib64/hw (mapper.aemu.so, gralloc.default.so) and are dlopened by name from a program of
+            // the system side (surfaceflinger, the aemu allocator): the linker refuses them as "not accessible
+            // for the namespace (default)", the mapper never loads and libui of 17 aborts with
+            // "gralloc-mapper is missing". Give the default namespace the vendor library directories.
+            val cfg = File(paths.root, "linkerconfig/ld.config.txt")
+            if (cfg.isFile) runCatching {
+                val out = cfg.readLines().toMutableList()
+                val want = listOf("/vendor/\${LIB}/hw", "/vendor/\${LIB}", "/odm/\${LIB}/hw", "/odm/\${LIB}")
+                var added = 0
+                // every section ([system], [vendor], ...) has its own set of namespaces; the default one of each
+                // gets the vendor and odm library directories, and the sphal one gets the .../hw subdirectory its
+                // search paths already name but its permitted paths did not cover.
+                var i = 0
+                while (i < out.size) {
+                    val l = out[i]
+                    if (l.startsWith("namespace.default.permitted.paths")) {
+                        var j = i
+                        while (j + 1 < out.size && out[j + 1].startsWith("namespace.default.permitted.paths")) j++
+                        val have = out.subList(i, j + 1).joinToString("\n")
+                        val add = want.filter { !have.contains(" " + it + "\n") && !have.endsWith(" " + it) }
+                        add.forEachIndexed { k, v -> out.add(j + 1 + k, "namespace.default.permitted.paths += " + v) }
+                        if (add.isNotEmpty()) { added += add.size; i = j + add.size }
+                    } else if (l.startsWith("namespace.sphal.permitted.paths")) {
+                        var j = i
+                        while (j + 1 < out.size && out[j + 1].startsWith("namespace.sphal.permitted.paths")) j++
+                        val have = out.subList(i, j + 1).joinToString("\n")
+                        val add = listOf("/vendor/\${LIB}/hw", "/odm/\${LIB}/hw").filter { !have.contains(" " + it + "\n") && !have.endsWith(" " + it) }
+                        add.forEachIndexed { k, v -> out.add(j + 1 + k, "namespace.sphal.permitted.paths += " + v) }
+                        if (add.isNotEmpty()) { added += add.size; i = j + add.size }
+                    }
+                    i++
+                }
+                if (added > 0) {
+                    cfg.writeText(out.joinToString("\n", postfix = "\n"))
+                    log("linkerconfig: default/sphal namespaces += $added vendor library paths")
+                }
+            }
         }
 
         r.derivedExports = emptyMap()
