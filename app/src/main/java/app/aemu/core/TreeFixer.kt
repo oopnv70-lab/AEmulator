@@ -1512,6 +1512,7 @@ class TreeFixer(
         healthdRelativeSysfs(base)
         personalityNoop()
         parkNfc()
+        parkBaiduInput()
         mainStackMaps()
         val power = File(root, "sys/power").apply { mkdirs() }
         for (n in listOf("state", "wake_lock", "wake_unlock", "autosleep")) File(power, n).let { if (!it.isFile) it.createNewFile(); it.setWritable(true, false) }
@@ -1999,6 +2000,19 @@ class TreeFixer(
         }
     }
 
+    private fun parkBaiduInput() {
+        // Its ImeApplication dies on every start: WebView.setDataDirectorySuffix gets the engine's host native
+        // library path (app.aemu.v0003/.../lib/arm64) instead of the package's own, the "/" inside the suffix is
+        // rejected and the process never comes up. The guest already ships another IME (wetype).
+        val parked = File(root, "system/.aemu-parked").apply { mkdirs() }
+        for (rel in listOf("system/app/BaiduInput_for_Honor", "system/app/BaiduInput_for_Honor.apk", "system/app/BaiduInput_for_Honor.odex")) {
+            val f = File(root, rel)
+            if (!f.exists() && !isLink(f)) continue
+            val dst = File(parked, rel.replace('/', '#'))
+            if (dst.exists()) ImageStore.wipe(dst)
+            if (f.renameTo(dst)) log("Baidu input set aside (host native path in WebView suffix)")
+        }
+    }
     private fun mainStackMaps() {
         if (img.api < 23) return
         val libc = File(root, "system/lib/libc.so")
