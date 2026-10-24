@@ -208,6 +208,7 @@ object InitPlan {
         // the same two AIDL HALs under the names their rc files really give them: the YAML-era entries above
         // ("motion-hal-1-0") never matched, so both restarted the full twelve times
         "motion-hal-aidl", "perf2-hal-1-0",
+        "hwfactoryinterface-hal",
     )
     private val SKIP_BIN = setOf(
         "logwrapper", "sh", "rild", "vold", "wpa_supplicant", "dhcpcd", "bluetoothd", "hciattach", "btld", "adbd",

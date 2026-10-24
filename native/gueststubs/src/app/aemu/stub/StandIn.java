@@ -28,6 +28,21 @@ public final class StandIn {
                 add.invoke(null, name, new Binder() {
                     @Override protected boolean onTransact(int code, Parcel data, Parcel reply, int flags) {
                         if (code == INTERFACE_TRANSACTION) { if (reply != null) reply.writeString(name); return true; }
+                        // system_server's FilteredPreloadAppManager / ActualPreloadAppManager call the firmware's
+                        // AIDL IHwFactoryInterface first. The vendor's own service CHECK-fails on the phone's
+                        // secflash/oeminfo hardware, so this stand-in answers oeminfo_Read (35) with an empty
+                        // IFacIntByte (result = 0, outBuf = empty): the managers stop at the AIDL branch and never
+                        // fall through to the fatal HIDL 1.1 getService().
+                        if (code == 35 && name.contains("hwfactoryinterface") && data != null && reply != null) {
+                            data.readString();   // interface token written by the Proxy
+                            data.readInt();      // idx
+                            data.readInt();      // size
+                            reply.writeNoException();          // no exception
+                            reply.writeInt(1);                 // readTypedObject: parcelable present
+                            reply.writeInt(0);                 // result = RET_SUCCESS
+                            reply.writeInt(0);                 // byte[] length = 0 (empty)
+                            return true;
+                        }
                         if (reply != null) reply.writeNoException();
                         return true;
                     }
