@@ -197,6 +197,17 @@ object InitPlan {
         "tp-hal-1-0", "sensorscal-hal-1-0", "vendor-qti-media-c2-hal-1-0", "qteeconnector-hal-1-0",
         "vendor.sensors-hal-2-0-multihal", "vendor.usb-hal-1-2", "display-color-hal-1-0",
         "vendor.atrace-hal-1-0", "vendor.boot-hal-1-1", "vendor.cas-hal-1-2", "vendor.memtrack-hal-1-0",
+        // 17: Qualcomm's AIDL allocator answers the same android.hardware.graphics.allocator.IAllocator/default the
+        // engine's own (native/gralloc5) does, and it registers later, so it wins the name. libui asks the
+        // allocator for the mapper's suffix, gets "qti", and looks for mapper/qti in the vendor manifest, where
+        // the engine declares mapper/aemu instead: "Failed to load mapper.qti.so", "mapper 4.x is not supported",
+        // then GraphicBufferMapper aborts (API 37 skips the HIDL 2/3 fallbacks). Its rc also says
+        // "onrestart restart surfaceflinger", so every surfaceflinger death drags the allocator back and the
+        // name stays taken. The engine's allocator keeps it now.
+        "vendor.qti.hardware.display.allocator",
+        // the same two AIDL HALs under the names their rc files really give them: the YAML-era entries above
+        // ("motion-hal-1-0") never matched, so both restarted the full twelve times
+        "motion-hal-aidl", "perf2-hal-1-0",
     )
     private val SKIP_BIN = setOf(
         "logwrapper", "sh", "rild", "vold", "wpa_supplicant", "dhcpcd", "bluetoothd", "hciattach", "btld", "adbd",
