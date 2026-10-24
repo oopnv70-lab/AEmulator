@@ -31,7 +31,7 @@ enum {
     NR_removexattr = 14, NR_lremovexattr = 15, NR_getcwd = 17, NR_dup = 23, NR_dup3 = 24, NR_fcntl = 25,
     NR_inotify_add_watch = 27, NR_ioctl = 29,
     NR_mknodat = 33, NR_mkdirat = 34, NR_unlinkat = 35, NR_symlinkat = 36, NR_linkat = 37, NR_renameat = 38,
-    NR_umount2 = 39, NR_mount = 40, NR_statfs = 43, NR_truncate = 45, NR_ftruncate = 46, NR_faccessat = 48,
+    NR_umount2 = 39, NR_mount = 40, NR_statfs = 43, NR_fstatfs = 44, NR_truncate = 45, NR_ftruncate = 46, NR_faccessat = 48,
     NR_chdir = 49, NR_chroot = 51, NR_fchmodat = 53, NR_fchownat = 54, NR_fchown = 55, NR_openat = 56, NR_close = 57,
     NR_lseek = 62, NR_read = 63, NR_write = 64, NR_writev = 66, NR_pread64 = 67, NR_pwrite64 = 68, NR_readlinkat = 78, NR_newfstatat = 79, NR_fstat = 80,
     NR_timerfd_create = 85, NR_utimensat = 88, NR_capget = 90, NR_capset = 91, NR_exit_group = 94, NR_unshare = 97,
@@ -1064,6 +1064,22 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             return 0;
         }
         /* fallthrough */
+    case NR_fstatfs:
+        if (g_free_gb && a[1]) {            // MT Manager & co. call fstatfs on an opened folder: same fake values
+            u64 gb = g_free_gb << 30;
+            memset((void *)a[1], 0, 120);
+            *(i64 *)a[1] = 0x01021997;      // EXT4_SUPER_MAGIC
+            *(i64 *)((char *)a[1] + 8) = 4096;
+            *(u64 *)((char *)a[1] + 16) = gb / 4096;
+            *(u64 *)((char *)a[1] + 24) = gb / 4096;
+            *(u64 *)((char *)a[1] + 32) = gb / 4096;
+            *(u64 *)((char *)a[1] + 40) = gb / 4096 / 16;
+            *(u64 *)((char *)a[1] + 48) = gb / 4096 / 16;
+            *(u64 *)((char *)a[1] + 64) = 255;
+            *(u64 *)((char *)a[1] + 72) = 4096;
+            return 0;
+        }
+        return S2(NR_fstatfs, a[0], a[1]);
     case NR_truncate: case NR_chdir:
     case NR_setxattr: case NR_lsetxattr: case NR_getxattr: case NR_lgetxattr: case NR_listxattr: case NR_llistxattr:
     case NR_removexattr: case NR_lremovexattr: {
@@ -1628,7 +1644,7 @@ struct bpf { u16 code; u8 jt, jf; u32 k; };
 static const u8 trapped[] = {
     NR_setxattr, NR_lsetxattr, NR_getxattr, NR_lgetxattr, NR_listxattr, NR_llistxattr, NR_removexattr, NR_lremovexattr,
     NR_getcwd, NR_inotify_add_watch, NR_ioctl, NR_mknodat, NR_mkdirat, NR_unlinkat, NR_symlinkat, NR_linkat,
-    NR_renameat, NR_umount2, NR_mount, NR_statfs, NR_truncate, NR_faccessat, NR_chdir, NR_chroot, NR_fchmodat,
+    NR_renameat, NR_umount2, NR_mount, NR_statfs, NR_fstatfs, NR_truncate, NR_faccessat, NR_chdir, NR_chroot, NR_fchmodat,
     NR_fchownat, NR_fchown, NR_openat, NR_readlinkat, NR_newfstatat, NR_fstat, NR_utimensat, NR_capget, NR_capset,
     NR_rt_sigaction, NR_reboot, NR_setregid, NR_setgid, NR_setreuid, NR_setuid, NR_setresuid, NR_getresuid,
     NR_setresgid, NR_getresgid, NR_setfsuid, NR_setfsgid, NR_getgroups, NR_setgroups, NR_getuid, NR_geteuid,
