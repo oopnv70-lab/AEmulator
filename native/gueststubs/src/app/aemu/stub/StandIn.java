@@ -39,6 +39,7 @@ public final class StandIn {
                             data.readInt();      // size
                             reply.writeNoException();          // no exception
                             reply.writeInt(1);                 // readTypedObject: parcelable present
+                            reply.writeInt(8);                 // IFacIntByte.writeToParcel: parcelable size header (result + byte[] len)
                             reply.writeInt(0);                 // result = RET_SUCCESS
                             reply.writeInt(0);                 // byte[] length = 0 (empty)
                             return true;
