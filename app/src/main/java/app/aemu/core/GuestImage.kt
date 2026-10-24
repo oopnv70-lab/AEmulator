@@ -167,6 +167,13 @@ data class GuestImage(
     val dirs: List<String>,
     val services: List<GuestService>,
     val sdcardPath: String,
+    /**
+     * Every guest path that has to show the shared card folder: [sdcardPath] plus the point the firmware names for
+     * itself. The native arm64 engine only redirects the paths in [NATIVE_SDCARD_POINTS]; a firmware whose
+     * storage_list.xml names another one (/storage/sdcard) would otherwise keep an empty directory of its own, and
+     * statfs on it answers with the image's filesystem — a storage screen reading "0 bytes".
+     */
+    val sdcardPaths: List<String> = emptyList(),
     /** тома из storage_list.xml, которыми управляет vold (не эмулируемые): о них должна знать заглушка vold */
     val volumes: List<String> = emptyList(),
     val settings: VmSettings,
@@ -200,6 +207,7 @@ data class GuestImage(
         .put("dirs", JSONArray(dirs))
         .put("services", JSONArray(services.map { it.toJson() }))
         .put("sdcardPath", sdcardPath)
+        .put("sdcardPaths", JSONArray(sdcardPaths.ifEmpty { listOf(sdcardPath) }))
         .put("volumes", JSONArray(volumes))
         .put("settings", settings.toJson())
         .put("createdAt", createdAt).put("sizeBytes", sizeBytes)
@@ -210,6 +218,21 @@ data class GuestImage(
         .put("baseId", baseId)
 
     companion object {
+        /**
+         * The guest paths the native arm64 engines redirect to the shared card folder: the `sd[]` table of
+         * native/guest64/<api>/run64.c. A path outside this list is a plain directory of the image, so the firmware
+         * that names it as its primary storage sees an empty card whose statfs is the image's filesystem.
+         */
+        val NATIVE_SDCARD_POINTS = listOf("/storage/emulated/0", "/storage/emulated/legacy", "/storage/self/primary", "/sdcard",
+            "/mnt/sdcard", "/mnt/user/0/primary", "/mnt/shell/emulated/0", "/storage/sdcard0")
+
+        /** the given point if the engine redirects it, else the nearest equivalent that it does (see above) */
+        fun cardPoint(p: String): String = when {
+            p in NATIVE_SDCARD_POINTS -> p
+            p.startsWith("/storage/emulated") -> "/storage/emulated/legacy"
+            else -> "/sdcard"
+        }
+
         fun fromJson(o: JSONObject): GuestImage {
             val ex = o.optJSONObject("exports")
             val exports = ex?.keys()?.asSequence()?.associateWith { ex.getString(it) } ?: emptyMap()
@@ -230,7 +253,11 @@ data class GuestImage(
                 exports = exports,
                 dirs = dirs,
                 services = svcs,
-                sdcardPath = o.optString("sdcardPath", "/mnt/sdcard"),
+                // (a profile built before sdcardPaths existed carries only the one point: keep both, so the
+                //  firmware's own name for the card is linked to the one the engine redirects)
+                sdcardPath = cardPoint(o.optString("sdcardPath", "/mnt/sdcard")),
+                sdcardPaths = ((o.optJSONArray("sdcardPaths")?.let { a -> List(a.length()) { a.getString(it) } }
+                    ?: emptyList()) + o.optString("sdcardPath", "/mnt/sdcard")).distinct(),
                 volumes = o.optJSONArray("volumes")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList(),
                 settings = VmSettings.fromJson(o.optJSONObject("settings")),
                 createdAt = o.optLong("createdAt", 0),

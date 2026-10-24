@@ -75,6 +75,13 @@ class Analyzer(private val ctx: Context, private val paths: VmPaths, private val
         val voldVols = vols.filter { !it.emulated }.map { it.mountPoint }
         val sdcard = vols.firstOrNull { it.primary && !it.emulated }?.mountPoint ?: exports["EXTERNAL_STORAGE"]?.takeIf { it.startsWith("/") }
             ?: when { api <= 13 -> "/mnt/sdcard"; api <= 16 -> "/storage/sdcard0"; else -> "/storage/emulated/legacy" }
+        // The native arm64 engine maps the card inside its runner by a fixed list of guest paths
+        // (/storage/emulated/0, /sdcard, /mnt/sdcard…: see the `sd[]` table in native/guest64/*/run64.c). A firmware whose
+        // storage_list.xml names a point outside that list (/storage/sdcard on the AOSP 12 default config, Hitachi and
+        // Huawei builds) gets a directory of its own, and the GuestRunner's EXTERNAL_STORAGE points there: the card is
+        // empty and statfs on it reports the image's own filesystem, which is where "0 bytes available" came from.
+        // The point the firmware names is kept as an alias of /sdcard in Sdcard.setup, so both see the shared folder.
+        val sdcardMapped = GuestImage.cardPoint(sdcard)
 
         val warnings = ArrayList<String>()
         if (noBuildProp) warnings += "No system/build.prop: Android version was inferred from the system tree."
@@ -116,7 +123,9 @@ class Analyzer(private val ctx: Context, private val paths: VmPaths, private val
             exports = exports,
             dirs = dirs,
             services = plan,
-            sdcardPath = sdcard,
+            sdcardPath = sdcardMapped,
+            // the point the firmware itself names stays reachable as an alias (Sdcard.setup links it to the card)
+            sdcardPaths = listOf(sdcard, sdcardMapped).distinct(),
             volumes = voldVols,
             settings = settings,
             createdAt = System.currentTimeMillis(),

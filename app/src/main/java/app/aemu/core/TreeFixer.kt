@@ -1589,8 +1589,9 @@ class TreeFixer(
                 }
             }
         }
-        // карта памяти видна «смонтированной»
-        add("/dev/block/vold/179:1", img.sdcardPath, "vfat", "rw,dirsync,nosuid,nodev,noexec,relatime,uid=1000,gid=1015,fmask=0702,dmask=0702")
+        // карта памяти видна «смонтированной»: точка, которую называет прошивка, и та, что подменяется движком
+        for (p in (img.sdcardPaths.ifEmpty { listOf(img.sdcardPath) } + "/sdcard").distinct())
+            add("/dev/block/vold/179:1", p, "vfat", "rw,dirsync,nosuid,nodev,noexec,relatime,uid=1000,gid=1015,fmask=0702,dmask=0702")
         for (p in mounts.keys) if (p != "/" && !p.startsWith("/proc") && !p.startsWith("/sys") && !p.startsWith("/dev")) File(root, p.trimStart('/')).mkdirs()
         val f = File(root, "proc/mounts")
         f.parentFile?.mkdirs()

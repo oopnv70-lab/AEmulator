@@ -29,9 +29,17 @@ object Sdcard {
                     "Put APKs, music and photos here, the guest sees them immediately.\n"
             )
         }
-        val all = (GUEST_PATHS + img.sdcardPath.trimStart('/')).distinct()
+        val all = (GUEST_PATHS + img.sdcardPath.trimStart('/') + img.sdcardPaths.map { it.trimStart('/') }).distinct()
         // (the native arm64 engine maps the card inside its runner too: AEMU64_SDCARD)
-        for (rel in all + listOf("storage/self/primary", "mnt/user/0/primary")) placeholder(File(paths.root, rel))
+        // The engine only redirects the points of its own list (GuestImage.NATIVE_SDCARD_POINTS). A firmware whose
+        // primary storage is another one - /storage/sdcard, which is what the AOSP default storage_list.xml names -
+        // keeps asking for that path, and a plain directory there is an empty card whose statfs answers with the
+        // image's filesystem: a storage screen reading "0 bytes". So every such point is linked to one the engine
+        // does map, and both then show the shared folder. This has to happen before the placeholders are made.
+        val card = img.sdcardPaths.ifEmpty { listOf(img.sdcardPath) }.firstOrNull { it in GuestImage.NATIVE_SDCARD_POINTS }
+        if (card != null) for (p in img.sdcardPaths) if (p !in GuestImage.NATIVE_SDCARD_POINTS && p.startsWith("/"))
+            link(File(paths.root, p.trimStart('/')), File(paths.root, card.trimStart('/')))
+        for (rel in all + listOf("storage/self/primary", "mnt/user/0/primary")) placeholder(File(paths.root, rel), keepLinks = true)
         for (rel in listOf("mnt/asec", "mnt/obb", "mnt/secure/asec")) File(paths.root, rel).mkdirs()
         runCatching { File(paths.bin, "sdcard.path").writeText(d.absolutePath + "\n") }
         log("sdcard: ${d.absolutePath} → guest sees ${img.sdcardPath}")
@@ -81,9 +89,11 @@ object Sdcard {
         runCatching { Os.symlink(target.absolutePath, f.absolutePath) }
     }
 
-    private fun placeholder(f: File) {
-        if (runCatching { Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)) runCatching { Os.remove(f.absolutePath) }
-        else if (f.isFile) f.delete()
+    private fun placeholder(f: File, keepLinks: Boolean = false) {
+        if (runCatching { Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)) {
+            if (keepLinks) return                                                  // a card alias: leave it as it is
+            runCatching { Os.remove(f.absolutePath) }
+        } else if (f.isFile) f.delete()
         f.mkdirs()
     }
 }
