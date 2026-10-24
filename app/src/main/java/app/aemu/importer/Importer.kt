@@ -245,6 +245,18 @@ class Importer(
                     zip.getInputStream(e).use { importSin(it, base) }
                 base.matches(Regex("(?i)vendor(\\.ext4)?\\.img")) ->
                     withEntrySource(zip, e) { runCatching { importImage(if (SparseSource.probe(it)) SparseSource(listOf(it)) else it, "vendor") } }
+                // (10+: product, system_ext and the dlkm partitions come as images of their own next to system.img)
+                base.matches(PART_IMAGE) ->
+                    withEntrySource(zip, e) {
+                        val p = base.lowercase().substringBefore('.')
+                        val mount = when (p) {
+                            "product", "system_ext" -> "system/$p"
+                            else -> p
+                        }
+                        runCatching {
+                            importImage(if (SparseSource.probe(it)) SparseSource(listOf(it)) else it, mount)
+                        }.onFailure { log("$base skipped: ${it.message}") }
+                    }
                 base.lowercase().endsWith(".zip") && (base.startsWith("image-") || depth == 0 && e.size > 50_000_000) -> {
                     handleNestedZip(spillEntry(zip, e), base, depth)
                 }
@@ -758,9 +770,9 @@ class Importer(
 
     companion object {
         /** partition images other than system inside a tar (taken after system, which SYSTEM_IMAGE catches first) */
-        private val PART_IMAGE = Regex("(?i)(vendor|product|odm|prism|optics)\\.img(\\.ext4)?(\\.lz4)?")
+        private val PART_IMAGE = Regex("(?i)(vendor|product|odm|prism|optics|system_ext|system_dlkm|vendor_dlkm|system_ext_dlkm)\\.img(\\.ext4)?(\\.lz4)?")
         /** system partition images by name (ext4/sparse, Samsung RFS, YAFFS2 dumps, super.img of 10+, erofs, f2fs) */
-        private val SYSTEM_IMAGE = Regex("(?i)system(_[a-z0-9]+)?(\\.ext4|\\.erofs|\\.f2fs)?\\.img(\\.ext4)?|" +
+        private val SYSTEM_IMAGE = Regex("(?i)system(_[ab])?(\\.ext4|\\.erofs|\\.f2fs)?\\.img(\\.ext4)?|" +
             "system_image\\.img|system\\.raw\\.img|factoryfs\\.(img|rfs)|" +
             "system\\.(rfs|yaffs2?|ext4|erofs|f2fs)|super(\\.raw)?\\.img|system_[ab]\\.img")
         /** partitions a vendor's skin adds beside the AOSP ones, mounted at the root under their own name: Xiaomi
