@@ -149,6 +149,15 @@
         <version>2</version>
         <fqname>IAllocator/default</fqname>
     </hal>
+    <!-- 17: Honor's FilteredPreloadAppManager / ActualPreloadAppManager call the AIDL factory interface first and,
+         when waitForDeclaredService throws for a missing declaration, fall back to the fatal HIDL 1.1 getService().
+         The vendor's own fragment declares the AIDL name, but its daemon CHECK-fails on the phone's secflash/oeminfo
+         hardware, so the engine declares the AIDL name itself and registers an empty stand-in (StandIn.java). -->
+    <hal format="aidl">
+        <name>vendor.honor.hardware.hwfactoryinterface</name>
+        <version>1</version>
+        <fqname>IHwFactoryInterface/hwfactoryinterface_hal</fqname>
+    </hal>
     <hal format="native">
         <name>mapper</name>
         <version>5.0</version>
