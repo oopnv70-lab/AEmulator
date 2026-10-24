@@ -2,13 +2,13 @@
 
 <img src="../../docs/assets/logo.png" width="128" alt="AEmulator logo"/>
 
-# AEmulator
+# AEmulator — Honor MagicOS 12 适配分支
 
-*Based on the original [SENSES emulator](https://github.com/Istratii-tech/SENSES)*
+*基于 [uxazu/AEmulator](https://github.com/uxazu/AEmulator) 的分支，更早的源头是 [Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES)*
 
 **在现代手机上运行经典 Android 固件——HTC Sense、TouchWiz、MIUI、AOSP。无需 root，无需电脑。**
 
-[![Version](https://img.shields.io/badge/version-0.0.0.3-3D5AFE?style=for-the-badge)](https://github.com/uxazu/aemulator/releases) [![License](https://img.shields.io/badge/license-GPL--3.0-3D5AFE?style=for-the-badge)](../../LICENSE) [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/uxazu/aemulator) [![Forum](https://img.shields.io/badge/Forum-aeforum-FF6D00?style=for-the-badge&logo=discourse&logoColor=white)](https://aeforum.uxazuu.space/) [![Telegram](https://img.shields.io/badge/Telegram-channel-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/aemulatorofficial) [![Website](https://img.shields.io/badge/site-aemulator.gt.tc-111?style=for-the-badge)](https://aemulator.gt.tc)
+[![Version](https://img.shields.io/badge/version-0.0.0.3-3D5AFE?style=for-the-badge)](https://github.com/oopnv70-lab/AEmulator/releases) [![License](https://img.shields.io/badge/license-GPL--3.0-3D5AFE?style=for-the-badge)](../../LICENSE) [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/oopnv70-lab/AEmulator) [![Fork of](https://img.shields.io/badge/fork%20of-uxazu%2FAEmulator-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/uxazu/AEmulator)
 
 [🇬🇧 English](../../README.md) · [🇷🇺 Русский](README.ru.md) · [🇺🇦 Українська](README.uk.md) · [🇩🇪 Deutsch](README.de.md) · [🇫🇷 Français](README.fr.md) · [🇪🇸 Español](README.es.md) · [🇧🇷 Português](README.pt-BR.md) · [🇮🇹 Italiano](README.it.md) · [🇵🇱 Polski](README.pl.md) · [🇹🇷 Türkçe](README.tr.md) · [🇸🇦 العربية](README.ar.md) · [🇮🇷 فارسی](README.fa.md) · [🇮🇳 हिन्दी](README.hi.md) · [🇮🇩 Indonesia](README.id.md) · [🇻🇳 Tiếng Việt](README.vi.md) · **🇨🇳 简体中文** · [🇯🇵 日本語](README.ja.md) · [🇰🇷 한국어](README.ko.md)
 
@@ -29,18 +29,12 @@ AEmulator 直接从固件文件启动真实的 Android 2.3–17 系统：Recover
 
 ## 📱 固件列表
 
-已验证固件的列表（含状态、备注和下载链接）现已移至我们的论坛。你可以在那里分享结果、提问并发现新的镜像。
-
-<div align="center">
-
-<a href="https://aeforum.uxazuu.space/"><img src="https://img.shields.io/badge/%E6%89%93%E5%BC%80%E8%AE%BA%E5%9D%9B-aeforum.uxazuu.space-FF6D00?style=for-the-badge&logo=discourse&logoColor=white" height="44" alt="论坛"/></a>
-
-</div>
+在 Xiaomi 15（骁龙 8 Elite，Android 16）上测试。任何适用于 Android 2.3–4.4 的 32 位 ARM 固件都值得一试；列表仅包含我们验证过的镜像。
 
 ## 🚀 快速开始
 
-1. 从 [Releases](https://github.com/uxazu/aemulator/releases) 下载并安装 APK。
-2. 在[论坛](https://aeforum.uxazuu.space/)找到固件并下载到手机。
+1. 从 [Releases](https://github.com/oopnv70-lab/AEmulator/releases) 下载并安装 APK。
+2. 把上表中的固件下载到手机。
 3. 打开 AEmulator →**添加固件**并选择文件。导入需要几分钟。
 4. 点击**启动**。首次启动较慢：系统正在优化应用。
 5. ⋮ 菜单可调音量、电源键和日志；⚙️ 打开设置与语言。
@@ -60,29 +54,45 @@ AEmulator 直接从固件文件启动真实的 Android 2.3–17 系统：Recover
 需要 JDK 17、Android SDK 36 和 NDK r28。客户机库通过 `native/*/build.sh` 构建。
 
 ```bash
-git clone https://github.com/uxazu/aemulator.git
-cd aemulator
-./gradlew assembleRelease
+git clone https://github.com/oopnv70-lab/AEmulator.git
+cd AEmulator
+./gradlew :app:assembleV0003Debug
 ```
+
+## 📌 本分支做了什么
+
+本仓库不是 AEmulator 的原版，而是**针对 Honor MagicOS 12（Android 12 / API 31）固件**的适配分支。上游代码基线为 `0.0.0.3`（根提交 `3b97ed5`），其后的提交全部为本分支改动。
+
+**目标**：让官方 Honor MagicOS 12 固件在 AEmulator 上完成开机、进入桌面、能装软件、能正常使用。
+
+### 已解决
+
+- **VINTF 清单缺失导致 system_server 反复重启**：补声明框架侧 HAL 服务（hidl.manager 1.0/1.2、hidl.token、frameworks.sensorservice、frameworks.displayservice、system.net.netd）；把 13+ 才支持的 `<fqname>` 写法改成 12 能读的 `<interface>/<instance>`；并把同一 HAL 的两个版本合并进单个 `<hal>` 块——否则 12 的解析器会把整份框架清单判为冲突，报 NULL VINTF MANIFEST
+
+- **厂商 HAL 拖死启动**：InitPlan 增加 vendor 硬件 HAL 跳过名单，并提供 `run/skip-services` 运行时跳过机制
+
+- **开机向导卡住**：Honor 语言选择页本身是一个 setup wizard。新增逐级重试窗口（4s/8s/15s/30s/60s）轮询 `dumpsys activity`，发现向导在前台就 `pm disable-user` 并切回 HOME；同时修掉 `skipWizardNow()` 因 `bootCount > 0` 提前返回、导致向导永远跳不过的问题
+
+- **安装软件报内存不足**：根因是存储路径映射。引擎的 `sd[]` 重定向表只认 8 个路径，而该固件 `storage_list.xml` 把主存储声明为 `/storage/sdcard`——不在表里，于是在镜像内只是个空目录。现在为固件自有存储点建符号链接指向引擎可映射的点，并让 `/proc/mounts` 为所有存储点写入 vfat 条目
+
+### 已知未解决
+
+- **设置里「可用空间」仍显示 0 B**。装软件已经正常，但存储页面的数字不对。已核对 AOSP 12 源码：存储页走 `StorageStatsService.getFreeBytes()`，其实现是 `path.getUsableSpace()`，也就是直接 `statfs(2)`，**并不读 `/proc/mounts`**。因此往镜像的 `/proc/mounts` 里加 FUSE 条目只会让文件「看起来」挂上了，对 `statfs` 的返回值没有任何影响。真正原因尚未定位，需要 guest 内部的 `df` / `statfs` 一手数据
+
+- **设置锁屏密码提示存储不足**。可能与上一条同源，也可能是独立问题：`run/gatekeeper-1-0.log` 里有 `Unable to open GateKeeper HAL`，以及 `android.hardware.gatekeeper@1.0-service-qti` 的 fatal signal 6。尚未确认
+
+### 已知限制
+
+`app.aemu.SHELL` 广播调试通道受 `BuildConfig.DEBUG` 限制。装机版本虽然是 DEBUGGABLE 的，但实测广播从未送达 receiver（`dumpsys` 显示 `dispatchClockTime=1970`），因此无法直接进 guest 执行 `df`。后续取证需要改用应用内写文件的方式。
 
 ## 🙏 致谢
 
-AEmulator 源自[原作者](https://t.me/istratii_tech1)的 HTC Desire HD 与 HTC One M7 模拟器——没有他的引擎就没有本项目。
-
-## 💙 支持项目
-
-如果 AEmulator 让你心爱的手机重获新生，欢迎支持开发：
-
-- 💳 [dalink.to/uxazu](https://dalink.to/uxazu)
-
-## 🔗 链接
-
-- 🌐 网站: [aemulator.gt.tc](https://aemulator.gt.tc)
-- 💬 论坛: [aeforum.uxazuu.space](https://aeforum.uxazuu.space/)
-- 📣 Telegram 频道: [@aemulatorofficial](https://t.me/aemulatorofficial)
-- 👤 作者: [uxazu](https://github.com/uxazu)
-- 🧬 原作者: [t.me/istratii_tech1](https://t.me/istratii_tech1)
+本项目的**全部原始架构与绝大部分代码**来自上游：
+- [uxazu/AEmulator](https://github.com/uxazu/AEmulator) — 直接上游，GPL-3.0
+- [Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES) — 更早的引擎源头（SENSES Emulator），GPL-2.0
+- 原始引擎作者：[t.me/istratii_tech1](https://t.me/istratii_tech1)
+第三方组件、二进制来源与许可证缺口详见 [NOTICE.md](../../NOTICE.md) 与 [docs/COMPLIANCE.md](../../docs/COMPLIANCE.md)。
 
 ## 📄 许可证
 
-GPL-3.0。Android、商标及固件归其所有者所有。
+GPL-3.0。本仓库是 AEmulator 的非官方分支，上游作者未参与本项目。Android、商标及固件归其所有者所有。第三方组件与许可证清单见 NOTICE.md。

@@ -13,7 +13,7 @@ T["en"] = dict(
            "Material 3 Expressive interface in 18 languages",
            "Free and open source (GPL-3.0)"],
     fw_title="Supported firmware",
-    fw_intro="Tested on a Xiaomi 15 (Snapdragon 8 Elite, Android 16). Any ARM firmware for Android 2.3–17 (vendor ROMs, factory images, arm64 GSIs) is worth trying — this list only covers images we have checked.",
+    fw_intro="This fork is being developed against official Honor MagicOS 12 (Android 12 / API 31, arm64). Upstream covers Android 2.3–17; nothing else has been tested in this fork.",
     c_device="Device", c_android="Android", c_skin="Skin", c_status="Status", c_download="Download",
     st_ok="Works", st_partial="Partly", st_wip="In progress", st_untested="Not tested yet", st_no="Not yet",
     n_sound="sound works", n_bt="Bluetooth app dialog", n_nosound="no sound yet", n_wip="boots to setup, being stabilised",
@@ -22,7 +22,7 @@ T["en"] = dict(
     fw_legal="Firmware files belong to their manufacturers. Links point to the manufacturers’ servers or public archives; AEmulator does not ship any firmware.",
     start_title="Quick start",
     steps=["Download the APK from [Releases]({repo}/releases) and install it.",
-           "Download a firmware from the table above to your phone.",
+           "Get a firmware file for the device you want to emulate (recovery ZIP, Odin package, factory image or GSI).",
            "Open AEmulator → **Add firmware** and pick the file. Import takes a few minutes.",
            "Press **Start**. The first boot is slower: the system optimises its apps.",
            "Use the ⋮ menu for volume, power button and logs; the ⚙️ button opens app settings and language."],
@@ -39,7 +39,8 @@ T["en"] = dict(
     links_title="Links",
     l_site="Website", l_channel="Telegram channel", l_author="Author", l_orig="Original author",
     license_title="License",
-    license_text="GPL-3.0. Android, trademarks and firmware belong to their owners.",
+    license_text="GPL-3.0. This is an unofficial fork of AEmulator; the upstream authors are not involved in it. "
+        "Android, trademarks and firmware belong to their owners. Third-party components and their licences: NOTICE.md.",
 )
 
 T["ru"] = dict(
@@ -654,7 +655,8 @@ T["zh-CN"] = dict(
     links_title="链接",
     l_site="网站", l_channel="Telegram 频道", l_author="作者", l_orig="原作者",
     license_title="许可证",
-    license_text="GPL-3.0。Android、商标及固件归其所有者所有。",
+    license_text="GPL-3.0。本仓库是 AEmulator 的非官方分支，上游作者未参与本项目。"
+        "Android、商标及固件归其所有者所有。第三方组件与许可证清单见 NOTICE.md。",
 )
 
 T["ja"] = dict(
@@ -741,7 +743,7 @@ T["ko"] = dict(
 
 # Список прошивок переехал на форум: заголовок, текст, кнопка и шаг 2 «Быстрого старта».
 _FORUM = {
-    "en": ("Firmware list", "The list of firmware that has been checked — with statuses, notes and download links — lives on our forum. Share your results there, ask questions and find new images.", "Forum", "Open the forum", "Find a firmware on the [forum](https://aeforum.uxazuu.space/) and download it to your phone."),
+    "en": ("Firmware list", "This fork targets Honor MagicOS 12 (Android 12 / API 31). Upstream supports Android 2.3–17; other firmware is untested here.", "Forum", "Open the forum", "Find a firmware on the [forum](https://aeforum.uxazuu.space/) and download it to your phone."),
     "ru": ("Список прошивок", "Список проверенных прошивок — со статусами, заметками и ссылками на скачивание — теперь на нашем форуме. Там же можно делиться результатами, задавать вопросы и находить новые образы.", "Форум", "Открыть форум", "Найдите прошивку на [форуме](https://aeforum.uxazuu.space/) и скачайте её на телефон."),
     "uk": ("Список прошивок", "Список перевірених прошивок — зі статусами, нотатками й посиланнями на завантаження — тепер на нашому форумі. Там можна ділитися результатами, ставити запитання й знаходити нові образи.", "Форум", "Відкрити форум", "Знайдіть прошивку на [форумі](https://aeforum.uxazuu.space/) і завантажте її на телефон."),
     "de": ("Firmware-Liste", "Die Liste geprüfter Firmwares — mit Status, Hinweisen und Download-Links — findest du in unserem Forum. Dort kannst du Ergebnisse teilen, Fragen stellen und neue Images entdecken.", "Forum", "Forum öffnen", "Such dir im [Forum](https://aeforum.uxazuu.space/) eine Firmware aus und lade sie aufs Handy."),
@@ -760,7 +762,7 @@ _FORUM = {
     "ja": ("ファームウェア一覧", "動作確認済みファームウェアの一覧（状態・メモ・ダウンロードリンク付き）はフォーラムにあります。結果の共有や質問、新しいイメージ探しもそちらでどうぞ。", "フォーラム", "フォーラムを開く", "[フォーラム](https://aeforum.uxazuu.space/)でファームウェアを探し、スマホにダウンロードします。"),
     "ko": ("펌웨어 목록", "검증된 펌웨어 목록(상태, 메모, 다운로드 링크 포함)은 포럼에 있습니다. 결과를 공유하고 질문하고 새 이미지를 찾아보세요.", "포럼", "포럼 열기", "[포럼](https://aeforum.uxazuu.space/)에서 펌웨어를 찾아 휴대폰에 내려받으세요."),
 }
+# 上游把「已验证固件列表」放在它自己的论坛上。本分支不维护那份列表，也不把用户指向上游的
+# 社群/论坛：忽略 _FORUM 的按钮与步骤替换，只保留各语言自己的 fw_title / fw_intro。
 for _c, (_title, _intro, _btn, _open, _step) in _FORUM.items():
-    T[_c].update(fw_title=_title, fw_intro=_intro, forum=_btn, forum_open=_open)
-    T[_c]["steps"] = list(T[_c]["steps"])
-    T[_c]["steps"][1] = _step
+    T[_c].update(fw_title=_title)

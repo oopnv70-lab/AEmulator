@@ -9,12 +9,13 @@
 window.AEMU_CONFIG = {
   "version": "0.0.0.3",
   "links": {
-    "repo": "https://github.com/uxazu/aemulator",
-    "site": "https://aemulator.gt.tc",
-    "forum": "https://aeforum.uxazuu.space/",
-    "channel": "https://t.me/aemulatorofficial",
-    "author": "https://github.com/uxazu",
+    "repo": "https://github.com/oopnv70-lab/AEmulator",
+    "upstream": "https://github.com/uxazu/AEmulator",
+    "site": "https://github.com/oopnv70-lab/AEmulator",
+    "forum": "",
+    "channel": "",
+    "author": "https://github.com/oopnv70-lab",
     "original": "https://t.me/istratii_tech1",
-    "donate": "https://dalink.to/uxazu"
+    "donate": ""
   }
 };
