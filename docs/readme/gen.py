@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Собирает README.md (английский) и docs/i18n/README.<код>.md из data.py + texts.py.
+"""Собирает README.md (китайский, HOME) и docs/i18n/README.<код>.md из data.py + texts.py.
 Запуск из корня репозитория: python docs/readme/gen.py"""
 import os, sys
 from urllib.parse import quote
@@ -113,24 +113,39 @@ CREDITS = {
 }
 
 
+# 根目录 README.md 用中文（本项目的主要语言），其余语言放在 docs/i18n/。
+HOME = "zh-CN"
+
+
+def readme_path(code):
+    """文件在仓库中的路径。"""
+    return "README.md" if code == HOME else f"docs/i18n/README.{code}.md"
+
+
 def path_of(code, from_code):
-    """Относительная ссылка на README языка code из файла языка from_code."""
-    if code == "en":
-        return "README.md" if from_code == "en" else "../../README.md"
-    return f"docs/i18n/README.{code}.md" if from_code == "en" else f"README.{code}.md"
+    """从 from_code 那份 README 指向 code 那份的相对链接。"""
+    if code == from_code:
+        return readme_path(code).split("/")[-1]
+    here, there = readme_path(from_code), readme_path(code)
+    if here.startswith("docs/") and not there.startswith("docs/"):
+        return "../../" + there
+    if not here.startswith("docs/") and there.startswith("docs/"):
+        return there
+    return there.split("/")[-1]
 
 
 def render(code):
     t = T[code]
-    up = "" if code == "en" else "../../"
+    zh = code.startswith("zh")  # 中英文正文手写，其余语言沿用原翻译
+    up = "" if code == HOME else "../../"
     L = []
     if code in RTL:
         L.append('<div dir="rtl">\n')
     L.append('<div align="center">\n')
     L.append(f'<img src="{up}docs/assets/logo.png" width="128" alt="AEmulator logo"/>\n')
-    L.append("# AEmulator — Honor MagicOS 12 fork\n" if not code.startswith("zh") else "# AEmulator — Honor MagicOS 12 适配分支\n")
+    L.append("# AEmulator — Honor MagicOS 12 fork\n" if not zh else "# AEmulator — Honor MagicOS 12 适配分支\n")
     L.append("*Fork of [uxazu/AEmulator](https://github.com/uxazu/AEmulator); the engine it grew from is "
-             "[Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES)*\n" if not code.startswith("zh") else
+             "[Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES)*\n" if not zh else
              "*基于 [uxazu/AEmulator](https://github.com/uxazu/AEmulator) 的分支，更早的源头是 "
              "[Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES)*\n")
     L.append(f"**{t['tagline']}**\n")
@@ -175,7 +190,7 @@ def render(code):
 def main():
     for code, _, _ in LANGS:
         assert code in T, code
-        out = os.path.join(ROOT, "README.md") if code == "en" else os.path.join(ROOT, "docs", "i18n", f"README.{code}.md")
+        out = os.path.join(ROOT, *readme_path(code).split("/"))
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "w", encoding="utf-8", newline="\n") as f:
             f.write(render(code))

@@ -2,56 +2,56 @@
 
 <img src="docs/assets/logo.png" width="128" alt="AEmulator logo"/>
 
-# AEmulator — Honor MagicOS 12 fork
+# AEmulator — Honor MagicOS 12 适配分支
 
-*Fork of [uxazu/AEmulator](https://github.com/uxazu/AEmulator); the engine it grew from is [Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES)*
+*基于 [uxazu/AEmulator](https://github.com/uxazu/AEmulator) 的分支，更早的源头是 [Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES)*
 
-**Run classic Android firmware — HTC Sense, TouchWiz, MIUI, AOSP — on a modern phone. No root, no PC.**
+**在现代手机上运行经典 Android 固件——HTC Sense、TouchWiz、MIUI、AOSP。无需 root，无需电脑。**
 
 [![Version](https://img.shields.io/badge/version-0.0.0.3-3D5AFE?style=for-the-badge)](https://github.com/oopnv70-lab/AEmulator/releases) [![License](https://img.shields.io/badge/license-GPL--3.0-3D5AFE?style=for-the-badge)](LICENSE) [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/oopnv70-lab/AEmulator) [![Fork of](https://img.shields.io/badge/fork%20of-uxazu%2FAEmulator-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/uxazu/AEmulator)
 
-**🇬🇧 English** · [🇷🇺 Русский](docs/i18n/README.ru.md) · [🇺🇦 Українська](docs/i18n/README.uk.md) · [🇩🇪 Deutsch](docs/i18n/README.de.md) · [🇫🇷 Français](docs/i18n/README.fr.md) · [🇪🇸 Español](docs/i18n/README.es.md) · [🇧🇷 Português](docs/i18n/README.pt-BR.md) · [🇮🇹 Italiano](docs/i18n/README.it.md) · [🇵🇱 Polski](docs/i18n/README.pl.md) · [🇹🇷 Türkçe](docs/i18n/README.tr.md) · [🇸🇦 العربية](docs/i18n/README.ar.md) · [🇮🇷 فارسی](docs/i18n/README.fa.md) · [🇮🇳 हिन्दी](docs/i18n/README.hi.md) · [🇮🇩 Indonesia](docs/i18n/README.id.md) · [🇻🇳 Tiếng Việt](docs/i18n/README.vi.md) · [🇨🇳 简体中文](docs/i18n/README.zh-CN.md) · [🇯🇵 日本語](docs/i18n/README.ja.md) · [🇰🇷 한국어](docs/i18n/README.ko.md)
+[🇬🇧 English](docs/i18n/README.en.md) · [🇷🇺 Русский](docs/i18n/README.ru.md) · [🇺🇦 Українська](docs/i18n/README.uk.md) · [🇩🇪 Deutsch](docs/i18n/README.de.md) · [🇫🇷 Français](docs/i18n/README.fr.md) · [🇪🇸 Español](docs/i18n/README.es.md) · [🇧🇷 Português](docs/i18n/README.pt-BR.md) · [🇮🇹 Italiano](docs/i18n/README.it.md) · [🇵🇱 Polski](docs/i18n/README.pl.md) · [🇹🇷 Türkçe](docs/i18n/README.tr.md) · [🇸🇦 العربية](docs/i18n/README.ar.md) · [🇮🇷 فارسی](docs/i18n/README.fa.md) · [🇮🇳 हिन्दी](docs/i18n/README.hi.md) · [🇮🇩 Indonesia](docs/i18n/README.id.md) · [🇻🇳 Tiếng Việt](docs/i18n/README.vi.md) · **🇨🇳 简体中文** · [🇯🇵 日本語](docs/i18n/README.ja.md) · [🇰🇷 한국어](docs/i18n/README.ko.md)
 
 </div>
 
 ---
 
-AEmulator boots a real Android 2.3–17 system image straight from a firmware file you already have: a recovery ZIP, an Odin archive, a Google factory image or a GSI. Old 32-bit firmware (2.3–4.4) runs through a patched QEMU, Android 5.0–17 runs natively on the phone’s arm64 cores. The kernel’s binder is emulated, graphics use your phone’s GPU and sound goes through Android’s audio stack — everything runs inside a normal app.
+AEmulator 直接从固件文件启动真实的 Android 2.3–17 系统：Recovery 卡刷包、Odin 包Google 出厂镜像或 GSI。旧的 32 位固件（2.3–4.4）通过改进的 QEMU 运行，Android 5.0–17 直接在手机的 arm64 核心上原生运行；内核 binder 被模拟，图形使用手机 GPU 绘制，声音经由 Android 音频系统播放——一切都在一个普通应用里完成。
 
-## ✨ Features
+## ✨ 功能
 
-- Import almost any firmware format: CWM/TWRP ZIP, Samsung Odin `.tar.md5`, Google factory `.tgz`, `system.img`, OTA `system.new.dat.br`
-- Vendor skins work as shipped: HTC Sense, Samsung TouchWiz, MIUI, AOSP
-- Hardware graphics through the GL bridge, sound, touch and multitouch, network with a modern TLS proxy
-- Shared memory-card folder for APKs, music and photos
-- Material 3 Expressive interface in 18 languages
-- Free and open source (GPL-3.0)
+- 导入几乎所有格式：CWM/TWRP 卡刷 ZIP、三星 Odin `.tar.md5`、Google 出厂 `.tgz`、`system.img`、OTA `system.new.dat.br`
+- 厂商系统原样运行：HTC Sense、三星 TouchWiz、MIUI、AOSP
+- 经 GL 桥的硬件图形、声音、触控与多点触控，带现代 TLS 代理的网络
+- 共享存储卡文件夹，方便放 APK、音乐和照片
+- Material 3 Expressive 界面，支持 18 种语言
+- 免费开源（GPL-3.0）
 
-## 📱 Firmware list
+## 📱 固件列表
 
-This fork is being developed against official Honor MagicOS 12 (Android 12 / API 31, arm64). Upstream covers Android 2.3–17; nothing else has been tested in this fork.
+在 Xiaomi 15（骁龙 8 Elite，Android 16）上测试。任何适用于 Android 2.3–4.4 的 32 位 ARM 固件都值得一试；列表仅包含我们验证过的镜像。
 
-## 🚀 Quick start
+## 🚀 快速开始
 
-1. Download the APK from [Releases](https://github.com/oopnv70-lab/AEmulator/releases) and install it.
-2. Get a firmware file for the device you want to emulate (recovery ZIP, Odin package, factory image or GSI).
-3. Open AEmulator → **Add firmware** and pick the file. Import takes a few minutes.
-4. Press **Start**. The first boot is slower: the system optimises its apps.
-5. Use the ⋮ menu for volume, power button and logs; the ⚙️ button opens app settings and language.
+1. 从 [Releases](https://github.com/oopnv70-lab/AEmulator/releases) 下载并安装 APK。
+2. 把上表中的固件下载到手机。
+3. 打开 AEmulator →**添加固件**并选择文件。导入需要几分钟。
+4. 点击**启动**。首次启动较慢：系统正在优化应用。
+5. ⋮ 菜单可调音量、电源键和日志；⚙️ 打开设置与语言。
 
-## 📋 Requirements
+## 📋 要求
 
-- Android 8.0+ on a 64-bit ARM phone (arm64-v8a)
-- About 1–3 GB of free space per firmware
-- A recent Snapdragon / Dimensity / Tensor chip is recommended
+- 64 位 ARM 手机（arm64-v8a）上的 Android 8.0+
+- 每个固件约需 1–3 GB 空间
+- 推荐较新的骁龙 / 天玑 / Tensor 芯片
 
-## ⚙️ How it works
+## ⚙️ 工作原理
 
-On Android 2.3–4.4 each guest process runs under a patched user-mode QEMU; on 5.0–17 the firmware’s own arm64 programs run natively, with one engine kernel per Android version catching their system calls. A binder daemon replaces the kernel driver, a GL bridge forwards OpenGL ES calls to the phone’s GPU, and small guest libraries (audio HAL, audio policy wrapper, LD_PRELOAD shim) adapt vendor code to the emulator. The importer reads the firmware, finds the init scripts in its boot image and builds a start plan for system services.
+在 Android 2.3–4.4 上，每个客户机进程运行在改进的用户态 QEMU 中；在 5.0–17 上，固件自带的 arm64 程序原生运行，由每个 Android 版本各自的引擎内核拦截其系统调用。binder 守护进程取代内核驱动，GL 桥把 OpenGL ES 调用转发给 GPU，小型客户机库（音频 HAL、audio policy 包装、LD_PRELOAD 垫片）让厂商代码适配模拟器。导入器读取固件，在 boot 镜像中找到 init 脚本，并生成系统服务的启动计划。
 
-## 🛠️ Build from source
+## 🛠️ 从源码构建
 
-You need JDK 17, Android SDK 36 and NDK r28. Native guest parts are built with the scripts in `native/*/build.sh`.
+需要 JDK 17、Android SDK 36 和 NDK r28。客户机库通过 `native/*/build.sh` 构建。
 
 ```bash
 git clone https://github.com/oopnv70-lab/AEmulator.git
@@ -59,40 +59,40 @@ cd AEmulator
 ./gradlew :app:assembleV0003Debug
 ```
 
-## 📌 What this branch does
+## 📌 本分支做了什么
 
-This is **not** upstream AEmulator: it is a fork aimed at running official **Honor MagicOS 12 (Android 12 / API 31)** firmware. The upstream baseline is `0.0.0.3` (root commit `3b97ed5`); every commit after it is ours.
+本仓库不是 AEmulator 的原版，而是**针对 Honor MagicOS 12（Android 12 / API 31）固件**的适配分支。上游代码基线为 `0.0.0.3`（根提交 `3b97ed5`），其后的提交全部为本分支改动。
 
-**Goal**: get official Honor MagicOS 12 firmware to boot to the home screen, install apps and be usable inside AEmulator.
+**目标**：让官方 Honor MagicOS 12 固件在 AEmulator 上完成开机、进入桌面、能装软件、能正常使用。
 
-### Fixed
+### 已解决
 
-- **system_server restarting in a loop over a missing VINTF manifest**: declare the framework-side HAL services the firmware leaves out (hidl.manager 1.0/1.2, hidl.token, frameworks.sensorservice, frameworks.displayservice, system.net.netd); rewrite the `<fqname>` form (13+) as the `<interface>/<instance>` form that 12 can parse; and merge the two versions of one HAL into a single `<hal>` block — two fragments make the parser of 12 reject the whole framework manifest as a conflict and report NULL VINTF MANIFEST
+- **VINTF 清单缺失导致 system_server 反复重启**：补声明框架侧 HAL 服务（hidl.manager 1.0/1.2、hidl.token、frameworks.sensorservice、frameworks.displayservice、system.net.netd）；把 13+ 才支持的 `<fqname>` 写法改成 12 能读的 `<interface>/<instance>`；并把同一 HAL 的两个版本合并进单个 `<hal>` 块——否则 12 的解析器会把整份框架清单判为冲突，报 NULL VINTF MANIFEST
 
-- **Vendor HALs stalling the boot**: a skip list for vendor hardware HALs in the start plan, plus a `run/skip-services` mechanism that skips a service at runtime
+- **厂商 HAL 拖死启动**：InitPlan 增加 vendor 硬件 HAL 跳过名单，并提供 `run/skip-services` 运行时跳过机制
 
-- **A setup wizard that could not be passed**: the Honor language picker is itself a setup wizard. A retry window (4 s / 8 s / 15 s / 30 s / 60 s) polls `dumpsys activity`; when the wizard is in front it is disabled with `pm disable-user` and HOME is brought up. This also fixes `skipWizardNow()` returning early on `bootCount > 0`, which meant the wizard was never skipped on images that had already booted
+- **开机向导卡住**：Honor 语言选择页本身是一个 setup wizard。新增逐级重试窗口（4s/8s/15s/30s/60s）轮询 `dumpsys activity`，发现向导在前台就 `pm disable-user` 并切回 HOME；同时修掉 `skipWizardNow()` 因 `bootCount > 0` 提前返回、导致向导永远跳不过的问题
 
-- **"Not enough space" when installing an app**: the root cause was storage path mapping. The engine's `sd[]` redirect table knows only eight paths, and this firmware declares its primary storage as `/storage/sdcard` — not one of them, so it stayed a plain empty directory inside the image. Firmware-owned storage points are now symlinked to a point the engine does map, and `/proc/mounts` gets a vfat entry for every storage point
+- **安装软件报内存不足**：根因是存储路径映射。引擎的 `sd[]` 重定向表只认 8 个路径，而该固件 `storage_list.xml` 把主存储声明为 `/storage/sdcard`——不在表里，于是在镜像内只是个空目录。现在为固件自有存储点建符号链接指向引擎可映射的点，并让 `/proc/mounts` 为所有存储点写入 vfat 条目
 
-### Known open issues
+### 已知未解决
 
-- **The storage screen still reads 0 B of free space.** Installing apps works, but the number is wrong. Checked against the AOSP 12 sources: the screen goes through `StorageStatsService.getFreeBytes()`, whose body is `path.getUsableSpace()`, i.e. a plain `statfs(2)` — it **never reads `/proc/mounts`**. Adding FUSE entries to the image's `/proc/mounts` therefore only makes the file *look* mounted; it cannot change what `statfs` returns. The real cause is not located yet and needs first-hand `df` / `statfs` data from inside the guest
+- **设置里「可用空间」仍显示 0 B**。装软件已经正常，但存储页面的数字不对。已核对 AOSP 12 源码：存储页走 `StorageStatsService.getFreeBytes()`，其实现是 `path.getUsableSpace()`，也就是直接 `statfs(2)`，**并不读 `/proc/mounts`**。因此往镜像的 `/proc/mounts` 里加 FUSE 条目只会让文件「看起来」挂上了，对 `statfs` 的返回值没有任何影响。真正原因尚未定位，需要 guest 内部的 `df` / `statfs` 一手数据
 
-- **Setting a lock-screen password reports "not enough storage".** It may share the cause above, or be unrelated: `run/gatekeeper-1-0.log` shows `Unable to open GateKeeper HAL` and a fatal signal 6 in `android.hardware.gatekeeper@1.0-service-qti`. Not confirmed
+- **设置锁屏密码提示存储不足**。可能与上一条同源，也可能是独立问题：`run/gatekeeper-1-0.log` 里有 `Unable to open GateKeeper HAL`，以及 `android.hardware.gatekeeper@1.0-service-qti` 的 fatal signal 6。尚未确认
 
-### Known limitation
+### 已知限制
 
-The `app.aemu.SHELL` broadcast debug channel is gated on `BuildConfig.DEBUG`. The installed build is DEBUGGABLE, yet the broadcast never reached the receiver in testing (`dumpsys` shows `dispatchClockTime=1970`), so a guest `df` cannot be run this way. Diagnosis has to go through a file written by the app itself instead.
+`app.aemu.SHELL` 广播调试通道受 `BuildConfig.DEBUG` 限制。装机版本虽然是 DEBUGGABLE 的，但实测广播从未送达 receiver（`dumpsys` 显示 `dispatchClockTime=1970`），因此无法直接进 guest 执行 `df`。后续取证需要改用应用内写文件的方式。
 
-## 🙏 Credits
+## 🙏 致谢
 
-The architecture and the vast majority of the code come from upstream:
-- [uxazu/AEmulator](https://github.com/uxazu/AEmulator) — the direct upstream, GPL-3.0
-- [Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES) — the earlier engine it grew from (SENSES Emulator), GPL-2.0
-- Original engine author: [t.me/istratii_tech1](https://t.me/istratii_tech1)
-Third-party components, binary provenance and the licence gaps are listed in [NOTICE.md](NOTICE.md) and [docs/COMPLIANCE.md](docs/COMPLIANCE.md).
+本项目的**全部原始架构与绝大部分代码**来自上游：
+- [uxazu/AEmulator](https://github.com/uxazu/AEmulator) — 直接上游，GPL-3.0
+- [Istratii-tech/SENSES](https://github.com/Istratii-tech/SENSES) — 更早的引擎源头（SENSES Emulator），GPL-2.0
+- 原始引擎作者：[t.me/istratii_tech1](https://t.me/istratii_tech1)
+第三方组件、二进制来源与许可证缺口详见 [NOTICE.md](NOTICE.md) 与 [docs/COMPLIANCE.md](docs/COMPLIANCE.md)。
 
-## 📄 License
+## 📄 许可证
 
-GPL-3.0. This is an unofficial fork of AEmulator; the upstream authors are not involved in it. Android, trademarks and firmware belong to their owners. Third-party components and their licences: NOTICE.md.
+GPL-3.0。本仓库是 AEmulator 的非官方分支，上游作者未参与本项目。Android、商标及固件归其所有者所有。第三方组件与许可证清单见 NOTICE.md。
