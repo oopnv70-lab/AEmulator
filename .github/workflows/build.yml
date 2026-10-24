@@ -25,6 +25,15 @@ jobs:
       - name: Install Android SDK components
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools" || true
+      - name: Install Android NDK and rebuild native guest64 kernel 37
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973" > /dev/null || true
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+          cd native/guest64
+          chmod +x build.sh
+          ./build.sh 37
+          cd ../..
+          git diff --stat app/src/main/jniLibs/arm64-v8a/libaemu64_37.so app/src/main/jniLibs/arm64-v8a/libbinderd64_37.so
 
       - name: Remove Windows-only gradle java.home property
         run: sed -i '/org.gradle.java.home/d' gradle.properties
