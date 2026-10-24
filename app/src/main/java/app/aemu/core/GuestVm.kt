@@ -508,7 +508,7 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
         bootAt = System.currentTimeMillis()
         bootDoneAt = 0
         screenUpAt = 0
-        everBooted = false; zygoteRestarts = 0; zygoteCrashes.clear()
+        everBooted = false; zygoteRestarts = 0; zygoteCrashes.clear(); wizardClosed = false; wizardWatching = false
         setState(State.BOOTING)
 
         // 4. binder
@@ -953,6 +953,7 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
     private fun afterBoot() {
         val r = guestRunner
         if (skipWizardNow()) return   // the system comes up again and gets here once more
+        skipStartedWizard()
         // (again: something in the first seconds after the boot completes turns it back off, and it is not known what;
         // a call made half a minute later stays)
         if (engine == Engine.N64 && kernel.clientComposition) Thread {
@@ -1004,6 +1005,44 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
         plannedRestart = true
         log("first boot: restarting the system past the setup wizard ($wizard)")
         synchronized(procs) { procs["zygote"] }?.let { z -> pidOf(z)?.let { runCatching { AProcess.sendSignal(it, 9) } } }
+        return true
+    }
+
+    /**
+     * [skipWizardNow] only runs on the very first boot, because it restarts the system. An image that has already
+     * booted (bootCount > 0) is outside its reach, and a firmware whose wizard becomes reachable only later — its
+     * package list is built while the system runs — then stays in front of it for ever: Honor MagicOS 12 opens its
+     * own language picker on every boot and waits for a choice no one makes. Here the wizard that is on screen right
+     * now is switched off in the running system and the home screen is brought up; nothing has to be restarted.
+     */
+    private fun skipStartedWizard() {
+        if (wizardWatching || wizardClosed || zygoteRestarts > 0) return
+        wizardWatching = true
+        // the wizard does not have to be in front at BOOT_COMPLETED: Honor's picker comes up seconds later,
+        // so the top activity is asked for a few times before the answer is taken as final
+        Thread {
+            for (wait in longArrayOf(4_000, 8_000, 15_000, 30_000, 60_000)) {
+                runCatching { Thread.sleep(wait) }
+                if (state != State.RUNNING || wizardClosed || zygoteRestarts > 0) return@Thread
+                if (runCatching { closeWizardIfShown() }.getOrDefault(false)) return@Thread
+            }
+        }.start()
+    }
+
+    /** one look: is a first-run wizard the resumed activity? then it is switched off in the running system */
+    private fun closeWizardIfShown(): Boolean {
+        val top = runCatching {
+            guestShell("dumpsys activity activities | grep -m6 -E 'mResumedActivity|ResumedActivity'", 60_000)
+        }.getOrDefault("")
+        val wizard = TreeFixer.FIRST_RUN_WIZARDS.firstOrNull { top.contains("$it/") } ?: return false
+        wizardClosed = true
+        log("setup wizard ($wizard) is on screen, switching it off")
+        runCatching {
+            guestShell(
+                "settings put global device_provisioned 1; settings put secure user_setup_complete 1; " +
+                    "pm disable-user --user 0 $wizard; am force-stop $wizard; " +
+                    "am start -a android.intent.action.MAIN -c android.intent.category.HOME", 90_000)
+        }.onFailure { log("setup wizard skip failed: ${it.message}") }
         return true
     }
 
@@ -1194,6 +1233,10 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
 
     @Volatile private var plannedRestart = false
     private var wizardSkipped = false
+    /** set by [skipStartedWizard]: the check costs a dumpsys, and the answer cannot turn from no to yes in one run */
+    @Volatile private var wizardClosed = false
+    /** [skipStartedWizard] starts one watcher per run */
+    @Volatile private var wizardWatching = false
 
     private fun restartZygote() {
         val z = img.services.firstOrNull { it.name == "zygote" } ?: return
