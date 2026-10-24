@@ -127,6 +127,7 @@ class TreeFixer(
         bpfMapNotes()
         aconfigStorage()
         kernelPolicyUnread()
+        sharedLibraryPaths()
         makeSysNodes()
         makeProcMounts()
         resolvConf()
@@ -1298,6 +1299,38 @@ class TreeFixer(
                 runCatching { f.setWritable(true); f.writeText(asked.replace(text, "<kernel-sepolicy-version>0</kernel-sepolicy-version>")) }
                     .onSuccess { log("build check: ${f.name} no longer asks for a kernel policy version") }
             }
+        }
+    }
+    /**
+     * A jar of a shared library that the permissions files name by a path the image does not have. The firmware keeps
+     * such a jar on its own partition (a Qualcomm one: /system_ext/framework/qti-telephony-hidl-wrapper.jar), and a
+     * system image flattened into /system leaves that partition empty, so an app that declares <uses-library> for it
+     * gets no classes at all: "ClassLoader referenced unknown path" and then NoClassDefFoundError in a boot receiver,
+     * which repeats at every boot and ends in a RescueParty reboot. The jar itself is present under /system/framework;
+     * the jar is put where the declaration looks for it, and the declaration is left as it is.
+     */
+    private fun sharedLibraryPaths() {
+        val perms = listOf("system/etc/permissions", "system_ext/etc/permissions", "product/etc/permissions", "vendor/etc/permissions")
+            .flatMap { d -> File(root, d).listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".xml") } }
+        if (perms.isEmpty()) return
+        val decl = Regex("<library\s+name=\"([^\"]+)\"\s+file=\"([^\"]+)\"")
+        for (f in perms) {
+            val text = runCatching { f.readText() }.getOrNull() ?: continue
+            var fixed = 0
+            for (m in decl.findAll(text)) {
+                val file = m.groupValues[2]
+                val dst = File(root, file.removePrefix("/"))
+                if (dst.exists()) continue
+                val base = file.substringAfterLast('/')
+                val src = listOf("system/framework/$base", "system_ext/framework/$base", "product/framework/$base", "vendor/framework/$base")
+                    .map { File(root, it) }.firstOrNull { it.isFile } ?: continue
+                runCatching {
+                    dst.parentFile?.mkdirs()
+                    src.copyTo(dst, overwrite = true)
+                    dst.setReadable(true, false)
+                }.onSuccess { fixed++ }
+            }
+            if (fixed > 0) log("${f.name}: $fixed shared library jar(s) put where the declaration looks for them")
         }
     }
 
