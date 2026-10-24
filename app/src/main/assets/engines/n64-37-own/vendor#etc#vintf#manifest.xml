@@ -158,6 +158,15 @@
         <version>1</version>
         <fqname>IHwFactoryInterface/hwfactoryinterface_hal</fqname>
     </hal>
+    <!-- 17: NpuManagerService's constructor calls waitForDeclaredService("android.hardware.npu.IScheduling/default")
+         and throws IllegalStateException when the AIDL service is missing. The firmware's vendor manifest does not
+         declare android.hardware.npu at all, so the engine declares the AIDL name itself and registers an empty
+         stand-in (StandIn.java), same pattern as hwfactoryinterface. -->
+    <hal format="aidl">
+        <name>android.hardware.npu</name>
+        <version>1</version>
+        <fqname>IScheduling/default</fqname>
+    </hal>
     <hal format="native">
         <name>mapper</name>
         <version>5.0</version>
