@@ -636,6 +636,8 @@ class TreeFixer(
             File(root, dir).listFiles()?.forEach { f ->
                 val id = f.name.substringBefore('.')
                 // (Qualcomm ships its location HAL as gps.default.so: no GPS at all is better than its modem worker)
+                // (the engine's own mapper is the one ro.hardware names: never park it)
+                if (f.name.startsWith("mapper.aemu")) return@forEach
                 if (!f.isFile || (f.name.endsWith(".default.so") && id != "gps") || id !in VENDOR_HALS) return@forEach
                 val dst = File(root, "system/.aemu-parked/${f.relativeTo(root).path.replace('/', '#')}")
                 dst.parentFile?.mkdirs()

@@ -303,6 +303,11 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
             val hw = File(paths.root, "vendor/etc/init/hw").list().orEmpty().mapNotNull { Regex("^init[.](qcom|mt[0-9]+[a-z]*)[.]rc$").find(it)?.groupValues?.get(1) }.firstOrNull()
             if (hw != null) overrides["ro.boot.hardware"] = hw
         }
+        // The framework's graphics library loads its buffer mapper by ro.hardware:<name>
+        // (/vendor/lib64/hw/mapper.<name>.so), and a firmware that never booted here leaves the
+        // property unset: libui of 17 then aborts with "gralloc-mapper is missing" and takes
+        // surfaceflinger down. The engine ships mapper.aemu.so for exactly this, so name it.
+        if (engine == Engine.N64) overrides["ro.hardware"] = "aemu"
         overrides["ro.sf.lcd_density"] = s.density.toString()
         overrides["qemu.sf.lcd_density"] = s.density.toString()
         // MIUI 10 forces the density of the phone's own panel from this one (440 on a 540-pixel screen)
