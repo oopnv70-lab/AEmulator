@@ -33,12 +33,10 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build debug APKs
-        run: ./gradlew --no-daemon :app:assembleStandardDebug :app:assembleV0003Debug
+        run: ./gradlew --no-daemon :app:assembleV0003Debug
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: AEmulator-Debug-APKs
-          path: |
-            app/build/outputs/apk/standard/debug/*.apk
-            app/build/outputs/apk/v0003/debug/*.apk
+          path: app/build/outputs/apk/v0003/debug/*.apk
