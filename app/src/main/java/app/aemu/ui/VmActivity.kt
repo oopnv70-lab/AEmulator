@@ -491,7 +491,14 @@ class VmActivity : ComponentActivity() {
         toast(getString(R.string.m_install_apk_start))
         thread {
             val ok = runCatching {
-                contentResolver.openInputStream(uri)!!.use { i -> java.io.File(dir, "aemu-install.apk").outputStream().use { o -> i.copyTo(o) } }
+                val f = java.io.File(dir, "aemu-install.apk")
+                contentResolver.openInputStream(uri)!!.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+                // the shared card lives on /storage/emulated/0 under the media provider: the file is owned by the
+                // host's media_rw group and mode 0660, which the app's uid cannot read. The guest's package manager
+                // opens it through the engine (the app's uid), so the file must be world-readable: without it every
+                // install dies inside the PM binder call with "Failure opening /sdcard/aemu-install.apk".
+                f.setReadable(true, false)
+                f.setWritable(true, true)
             }.isSuccess
             if (!ok) { toast(getString(R.string.m_failed)); return@thread }
             val out = runCatching { vm.guestShell("pm install -r " + vm.img.sdcardPath.trimEnd('/') + "/aemu-install.apk", 300_000) }.getOrElse { it.toString() }
