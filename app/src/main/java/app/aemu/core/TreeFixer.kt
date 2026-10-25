@@ -1536,6 +1536,10 @@ class TreeFixer(
         )
         for ((rel, v) in bat) File(base, rel).let { if (!it.isFile) { it.parentFile?.mkdirs(); it.writeText(v + "\n") } }
         healthdRelativeSysfs(base)
+        // the board's two cooling fans: the Honor thermal service reports them from sys/class/hn_thermal/fan/fanN,
+        // and Settings shows its fan page (ThermalFanSettingsActivity) once those nodes answer
+        fanSysfs()
+
         personalityNoop()
         parkNfc()
         parkBaiduInput()
@@ -1935,6 +1939,36 @@ class TreeFixer(
         if (changed) runCatching { f.writeText(xml); log("setup wizard disabled: ${targets.joinToString()}") }
     }
 
+    /**
+     * The board has two cooling fans and the firmware ships their control everywhere but the hardware: Settings'
+     * ThermalFanSettingsActivity, SystemUI's fan tile and the Honor thermal service all read
+     * sys/class/hn_thermal/fan/fanN. Nothing creates that tree here, so the pages are empty and the service has
+     * nothing to report. The nodes are written with the values of an idle machine (fans present, spinning slowly).
+     */
+    private fun fanSysfs() {
+        if (engine != Engine.N64) return
+        val fan = File(root, "sys/class/hn_thermal/fan")
+        val nodes = mapOf(
+            "fan_count" to "2",
+            "fan1/fan_max_rpm" to "5200", "fan1/fan_min_rpm" to "0", "fan1/fan_target_rpm" to "0",
+            "fan1/fan_speed_rpm" to "0", "fan1/fan_detect_rpm" to "0", "fan1/fan_speed_pwm" to "0",
+            "fan1/fan_min_pwm" to "0", "fan1/fac_pwm_rpm_table" to "0:0 64:1800 128:3200 192:4300 255:5200",
+            "fan2/fan_max_rpm" to "5200", "fan2/fan_min_rpm" to "0", "fan2/fan_target_rpm" to "0",
+            "fan2/fan_speed_rpm" to "0", "fan2/fan_detect_rpm" to "0", "fan2/fan_speed_pwm" to "0",
+            "fan2/fan_min_pwm" to "0", "fan2/fac_pwm_rpm_table" to "0:0 64:1800 128:3200 192:4300 255:5200",
+        )
+        var n = 0
+        for ((rel, v) in nodes) File(fan, rel).let {
+            if (!it.isFile) { it.parentFile?.mkdirs(); it.writeText(v + "\n"); n++ }
+            it.setReadable(true, false); it.setWritable(true, false)
+        }
+        // the ambient/fold temps init.honor.thermal.rc hands to system, and the IPA nodes it chowns: absent files
+        // make init log a failure for each line, and the thermal service reads the ambient one first
+        for ((rel, v) in mapOf("temp/ambient" to "250", "temp/fold_state" to "0")) File(root, "sys/class/hn_thermal/$rel").let {
+            if (!it.isFile) { it.parentFile?.mkdirs(); it.writeText(v + "\n"); n++ }
+        }
+        if (n > 0) log("cooling fans: $n thermal node(s) created (fan_count 2)")
+    }
     /**
      * Static healthd (5.0+) checks the battery files with faccessat, which the stand's qemu does not map into the
      * guest root: it tests the phone's real /sys and finds no battery. Its path constant becomes the relative

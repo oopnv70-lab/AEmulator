@@ -308,6 +308,16 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
         // property unset: libui of 17 then aborts with "gralloc-mapper is missing" and takes
         // surfaceflinger down. The engine ships mapper.aemu.so for exactly this, so name it.
         if (engine == Engine.N64) overrides["ro.hardware"] = "aemu"
+        // The firmware is of a phone with two active cooling fans, but odm/etc/build.prop is not part of the property
+        // chain this image boots from, and the only key every reader checks — msc.thermal_fan.feature_version — is
+        // unset, which each of them takes as "no fan here": Settings' ThermalFanSettingsActivity and SystemUI's fan
+        // tile are compiled in and never offered. Declare the fans and the pages appear (the sysfs nodes the pages
+        // read are written by TreeFixer.fanSysfs).
+        if (engine == Engine.N64) {
+            overrides["msc.thermal_fan.feature_version"] = "1"
+            overrides["vendor.fan_support.prop"] = "1"
+            overrides["vendor.fan_count.prop"] = "2"
+        }
         overrides["ro.sf.lcd_density"] = s.density.toString()
         overrides["qemu.sf.lcd_density"] = s.density.toString()
         // MIUI 10 forces the density of the phone's own panel from this one (440 on a 540-pixel screen)
