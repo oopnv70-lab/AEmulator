@@ -32,7 +32,7 @@ __attribute__((naked)) void _start(void) {
     __asm__ volatile("mov x0, sp\nb real_start");
 }
 
-__attribute__((noreturn)) static void real_start(long *sp) {
+__attribute__((noreturn)) void real_start(long *sp) {
     long argc = sp[0];
     char **argv = (char **)(sp + 1);
     char **envp = argv + argc + 1;
