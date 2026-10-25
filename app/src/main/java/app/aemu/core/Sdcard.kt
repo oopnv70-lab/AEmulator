@@ -55,12 +55,15 @@ object Sdcard {
     private fun choose(ctx: Context, img: GuestImage, log: (String) -> Unit): File? {
         val safe = img.name.replace(Regex("[^\\p{L}\\p{N} ._-]"), "_").take(40).ifBlank { img.id }
         val tries = ArrayList<File>()
+        // The app's own external dir is always owned by this app and never taken over by another process,
+        // unlike a folder under /storage/emulated/0/AEmulator whose owner can change (media_rw or another app)
+        // and then block the app with 2770 permissions. It is therefore the first choice.
+        ctx.getExternalFilesDir(null)?.let { tries.add(File(it, "sdcard-${img.id}")) }
         runCatching {
             if (Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED) {
                 tries.add(File(File(Environment.getExternalStorageDirectory(), "AEmulator"), "$safe (${img.id})"))
             }
         }
-        ctx.getExternalFilesDir(null)?.let { tries.add(File(it, "sdcard-${img.id}")) }
         tries.add(File(ctx.filesDir, "sdcard-${img.id}"))
         for (t in tries) if (writable(t)) return t else log("sdcard: ${t.absolutePath} not writable, trying next")
         log("sdcard: no writable location")
