@@ -1947,6 +1947,21 @@ class TreeFixer(
      */
     private fun fanSysfs() {
         if (engine != Engine.N64) return
+        // The switch that decides whether the tile and the page are offered at all is not a property: the drawer
+        // filter (hihonor.settingslib.drawer.r, its "P") asks HwCfgFilePolicy.getCfgFileList("/thermalFanSound", 0)
+        // and hides both when the list is empty. That policy looks for the name in CUST_POLICY_DIRS
+        // (/system/magic:/system/global:/system/etc:/oem:/data/cust:/cust_spec), so a single entry under one of them
+        // is what the firmware's own cust partition would have carried. Both the sound files and the page come from
+        // that partition on the phone, and this image was extracted without it.
+        runCatching {
+            val cust = File(root, "system/etc/thermalFanSound")
+            if (!cust.isDirectory) {
+                cust.mkdirs()
+                // the page plays one of these when the fan starts; empty files keep the player from throwing
+                for (n in listOf("fan_start.mp3", "fan_stop.mp3")) File(cust, n).takeIf { !it.isFile }?.writeBytes(ByteArray(0))
+                log("cooling fans: /system/etc/thermalFanSound added (the drawer's fan switch reads it)")
+            }
+        }.onFailure { log("fan cust dir failed: ${it.message}") }
         val fan = File(root, "sys/class/hn_thermal/fan")
         val nodes = mapOf(
             "fan_count" to "2",
