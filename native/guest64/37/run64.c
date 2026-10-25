@@ -59,6 +59,16 @@ enum {
 static u64 slen(const char *s) { u64 n = 0; while (s[n]) n++; return n; }
 static int seq(const char *a, const char *b) { while (*a && *a == *b) a++, b++; return *a == *b; }
 static int pre(const char *s, const char *p) { while (*p) if (*s++ != *p++) return 0; return 1; }
+// the guest-side names of the shared card (same list as in xl())
+static int is_guest_card(const char *n) {
+    static const char *const sd[] = { "/storage/emulated/0", "/storage/emulated/legacy", "/storage/self/primary", "/sdcard",
+                                      "/mnt/sdcard", "/mnt/user/0/primary", "/mnt/shell/emulated/0", "/storage/sdcard0", 0 };
+    for (int i = 0; sd[i]; i++) {
+        u64 l = slen(sd[i]);
+        if (pre(n, sd[i]) && (n[l] == '/' || !n[l])) return 1;
+    }
+    return 0;
+}
 void *memcpy(void *d, const void *s, u64 n) { u8 *a = d; const u8 *b = s; while (n--) *a++ = *b++; return d; }
 void *memset(void *d, int c, u64 n) { u8 *a = d; while (n--) *a++ = (u8)c; return d; }
 void *memmove(void *d, const void *s, u64 n) {
@@ -209,6 +219,12 @@ struct kstat {
     u64 st_dev, st_ino; u32 st_mode, st_nlink, st_uid, st_gid; u64 st_rdev, __pad1; i64 st_size;
     int st_blksize, __pad2; i64 st_blocks; i64 at, atn, mt, mtn, ct, ctn; u32 __u4, __u5;
 };
+struct statx {
+    u32 stx_mask, stx_blksize; u64 stx_attributes; u32 stx_nlink, stx_uid, stx_gid; u16 stx_mode, __spare0;
+    u64 stx_ino, stx_size, stx_blocks, stx_attributes_mask; u64 ats, atn, bts, btn, cts, ctn, mts, mtn;
+    u32 stx_rdev_major, stx_rdev_minor, stx_dev_major, stx_dev_minor; u64 stx_mnt_id;
+    u32 stx_dio_mem_align, stx_dio_offset_align; u64 __spare3[12];
+};
 
 // files of the image belong to the app's uid; the guest expects its own system to belong to root
 static void fake_owner(struct kstat *st) {
@@ -218,6 +234,17 @@ static void fake_owner(struct kstat *st) {
         // the importer keeps everything 0700/0600: show the usual world-readable modes
         st->st_mode |= ((st->st_mode & 0500) >> 3) | ((st->st_mode & 0500) >> 6);
     }
+}
+// The shared card folder is the app's own directory on the phone (uid of the app, mode 2770 with no "other"
+// bits). The guest is an ordinary user there: every app in it - the firmware's own file manager included - asks
+// the mode before it opens a file for writing and gives up when the answer says "not for you". The card of a real
+// phone is a FAT volume, so it is shown as one: owned by the guest's own user, mounted with the fmask/dmask of
+// the vold line in /proc/mounts (0666/0777 minus the umask), which is what every file manager expects to see.
+static void fake_card(struct kstat *st) {
+    if ((st->st_mode & 0170000) == 0040000) st->st_mode = 0040777;    // a directory: drwxrwxrwx
+    else if ((st->st_mode & 0170000) != 0120000) st->st_mode = 0100666; // a file: -rw-rw-rw-
+        st->st_uid = 0;                           // root, as the vold line of a card names it
+    st->st_gid = 1015;                        // sdcard_rw
 }
 
 // ---------------------------------------------------------------------------------------------------- ashmem
@@ -922,6 +949,8 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
         if (r == 0) {
             struct kstat *st = (struct kstat *)a[2];
             fake_owner(st);
+            // the shared card folder is a FAT volume to the guest (see fake_card)
+            if (g_sdlen && P(1) && is_guest_card(P(1))) fake_card(st);
             // an app's own data belongs to the app (the class loader refuses an oat directory of another owner)
             u32 own[2];
             if (a[1] && pre(P(1), "/data/") && S4((a[3] & 0x100) ? NR_lgetxattr : NR_getxattr, h1, OWN_ATTR, own, sizeof own) == sizeof own) {
@@ -966,6 +995,8 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             }
             u64 pl = slen(P(1));
             if (pre(P(1), "/proc/") && pl >= 13 && seq(P(1) + pl - 13, "/attr/current")) return 0;
+            // the shared card is a writable FAT volume to the guest: say yes to every check
+            if (g_sdlen && is_guest_card(P(1))) return 0;
             // 14: ART refuses to load a dex file the app could write ("Writable dex file ... is not allowed"); every
             // file of the image is the host app's own, so what a phone keeps read-only for apps reads as such
             if ((a[2] & 2) && g_uid != 0 && (g_uid >= 10000 || !pre(P(1), "/data/")) && (pre(P(1), "/system/") || pre(P(1), "/system_ext/") || pre(P(1), "/product/")
@@ -979,7 +1010,15 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     case NR_statx: {
         char *b1 = PB(0);
         NEEDX(1);
-        return S5(nr, a[0], h1, a[2], a[3], a[4]);
+        long r = S5(nr, a[0], h1, a[2], a[3], a[4]);
+        if (nr == NR_statx && r == 0 && a[2] && g_sdlen && P(1) && is_guest_card(P(1))) {
+            struct statx *sx = (struct statx *)a[2];
+            u32 m = sx->stx_mode;
+            if ((m & 0170000) == 0040000) sx->stx_mode = 0040777;
+            else if ((m & 0170000) != 0120000) sx->stx_mode = 0100666;
+            sx->stx_uid = 0; sx->stx_gid = 1015;
+        }
+        return r;
     }
     case NR_fchown: own_put(7 /*fsetxattr*/, a[0], a[1], a[2]); return 0;
     case NR_fchownat: {
