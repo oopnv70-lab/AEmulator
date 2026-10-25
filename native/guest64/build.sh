@@ -16,6 +16,14 @@ OUT="$DIR/libaemu64_$TAG.so"
   -fno-pic -no-pie -Wall -Wno-unused-function -Wl,--image-base=0x2000000000 -Wl,--build-id=none -Wl,-z,norelro \
   -o "$OUT" start.S run64.c || exit 1
 "$BIN/llvm-strip" "$OUT" 2>/dev/null || true
+# su: a uid-0 shim for guest root managers (runs as a normal guest program; the
+# engine's trap lets its setresuid/setresgid through and the exec passes the
+# root ids on to the shell). Installed by TreeFixer as system/bin/su.
+SUOUT="../../../app/src/main/assets/engines/n64-$TAG/system#bin#su"
+mkdir -p "$(dirname "$SUOUT")"
+"$BIN/clang" --target=aarch64-linux-android26 -O2 -static -nostdlib -ffreestanding -fno-builtin -fno-stack-protector \
+  -Wl,--build-id=none -o "$SUOUT" su.c || exit 1
+"$BIN/llvm-strip" "$SUOUT" 2>/dev/null || true
 # binderd64: the binder driver in user space for those programs (an ordinary host program)
 "$BIN/clang" --target=aarch64-linux-android26 -O2 -Wall -o "$DIR/libbinderd64_$TAG.so" binderd.c || exit 1
 "$BIN/llvm-strip" "$DIR/libbinderd64_$TAG.so" 2>/dev/null || true
