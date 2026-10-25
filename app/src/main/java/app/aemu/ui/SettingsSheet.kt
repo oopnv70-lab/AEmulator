@@ -121,7 +121,14 @@ fun SettingsSheet(img: GuestImage, onDismiss: () -> Unit, onSave: (VmSettings) -
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             Toggle(stringResource(R.string.vs_lowram), stringResource(R.string.vs_lowram_sub), s.lowRam) { s = s.copy(lowRam = it) }
-            Toggle(stringResource(R.string.vs_root_apps), stringResource(R.string.vs_root_apps_sub), s.rootApps) { s = s.copy(rootApps = it) }
+            OutlinedTextField(
+                value = s.rootPkg,
+                onValueChange = { s = s.copy(rootPkg = it.trim()) },
+                label = { Text(stringResource(R.string.vs_root_pkg)) },
+                supportingText = { Text(stringResource(R.string.vs_root_pkg_sub)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
             val freeIdx = FREE_GB_STEPS.indexOf(s.freeGb).coerceAtLeast(0)
             ListItem(
                 headlineContent = { Text(stringResource(R.string.vs_free_space)) },

@@ -95,7 +95,7 @@ static char g_exe[PATH_MAX];    // guest view of the running program
 static int g_selinux;           // this program is shown a (permissive) SELinux: see /sys/fs/selinux/status
 static int g_uid, g_gid;        // the ids the guest believes it has (the effective ones)
 static int g_ruid, g_rgid;      // ...and its real ones
-static int g_root_apps;         // AEMU64_ROOT_APPS: run guest apps (uid >= 10000) as uid 0
+static int g_root_uid;          // AEMU64_ROOT_UID: only this guest uid is reported as uid 0
 static u32 g_real_uid;
 static char g_qemu[512];        // qemu-arm for the firmware's 32-bit programs (AEMU64_QEMU)
 static int g_crash;
@@ -718,7 +718,7 @@ static long do_exec(const char *path, char *const argv[], char *const envp[]) {
     if (g_qemu[0]) { memcpy(e_qemu, "AEMU64_QEMU=", 12); memcpy(e_qemu + 12, g_qemu, slen(g_qemu) + 1); *a++ = e_qemu; }
     static char e_sd[540];
     if (g_sdlen) { memcpy(e_sd, "AEMU64_SDCARD=", 14); memcpy(e_sd + 14, g_sd, g_sdlen + 1); *a++ = e_sd; }
-    if (g_root_apps) *a++ = "AEMU64_ROOT_APPS=1";
+    if (g_root_uid >= 0) { static char e_ru[64]; memcpy(e_ru, "AEMU64_ROOT_UID=", 16); char tr[24], *sr = utoa((u64)(u32)g_root_uid, tr + sizeof tr); memcpy(e_ru + 16, sr, slen(sr) + 1); *a++ = e_ru; }
     *a++ = 0;
     r = S3(NR_execve, g_self, v, e);
     S2(NR_munmap, v, need);
@@ -1364,10 +1364,10 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     // (the real ids apart from the effective ones: zygote preloads its classes as "nobody" by the effective ids only,
     // and MIUI's checks its real one there - with one id for both it took itself for a stranger and reported that
     // over binder, which a zygote must not open)
-    case NR_setuid: if (g_root_apps && (int)a[0] >= 10000) a[0] = 0; g_uid = g_ruid = (int)a[0]; ids_put(); return 0;
-    case NR_setgid: if (g_root_apps && (int)a[0] >= 10000) a[0] = 0; g_gid = g_rgid = (int)a[0]; return 0;
-    case NR_setreuid: case NR_setresuid: if (g_root_apps) { if ((int)a[0] >= 10000) a[0] = 0; if ((int)a[1] >= 10000) a[1] = 0; } if ((int)a[0] != -1) g_ruid = (int)a[0]; if ((int)a[1] != -1) g_uid = (int)a[1]; ids_put(); return 0;
-    case NR_setregid: case NR_setresgid: if (g_root_apps) { if ((int)a[0] >= 10000) a[0] = 0; if ((int)a[1] >= 10000) a[1] = 0; } if ((int)a[0] != -1) g_rgid = (int)a[0]; if ((int)a[1] != -1) g_gid = (int)a[1]; return 0;
+    case NR_setuid: if (g_root_uid >= 0 && (int)a[0] == g_root_uid) a[0] = 0; g_uid = g_ruid = (int)a[0]; ids_put(); return 0;
+    case NR_setgid: if (g_root_uid >= 0 && (int)a[0] == g_root_uid) a[0] = 0; g_gid = g_rgid = (int)a[0]; return 0;
+    case NR_setreuid: case NR_setresuid: if (g_root_uid >= 0) { if ((int)a[0] == g_root_uid) a[0] = 0; if ((int)a[1] == g_root_uid) a[1] = 0; } if ((int)a[0] != -1) g_ruid = (int)a[0]; if ((int)a[1] != -1) g_uid = (int)a[1]; ids_put(); return 0;
+    case NR_setregid: case NR_setresgid: if (g_root_uid >= 0) { if ((int)a[0] == g_root_uid) a[0] = 0; if ((int)a[1] == g_root_uid) a[1] = 0; } if ((int)a[0] != -1) g_rgid = (int)a[0]; if ((int)a[1] != -1) g_gid = (int)a[1]; return 0;
     case NR_setfsuid: return g_uid;
     case NR_setfsgid: return g_gid;
     case NR_getresuid: for (int i = 0; i < 3; i++) if (a[i]) *(u32 *)a[i] = (u32)(i ? g_uid : g_ruid); return 0;
@@ -1847,8 +1847,8 @@ void aemu_main(u64 *sp) {
     if ((r = env_get(envp, "AEMU64_HWBINDER")) && slen(r) < sizeof g_hwbsock) memcpy(g_hwbsock, r, slen(r) + 1);
     if ((r = env_get(envp, "AEMU64_VNDBINDER")) && slen(r) < sizeof g_vndbsock) memcpy(g_vndbsock, r, slen(r) + 1);
     if ((r = env_get(envp, "AEMU64_ID"))) { g_uid = (int)atou(r); while (*r && *r != ',') r++; if (*r) g_gid = (int)atou(r + 1); }
-    g_root_apps = env_get(envp, "AEMU64_ROOT_APPS") != 0;
-    if (g_root_apps && g_uid >= 10000) g_uid = g_gid = 0;
+    g_root_uid = -1;
+    if ((r = env_get(envp, "AEMU64_ROOT_UID"))) g_root_uid = (int)atou(r);
     g_ruid = g_uid; g_rgid = g_gid;
     if (g_root[0]) ids_put();
     if (g_rootlen < 500) {
