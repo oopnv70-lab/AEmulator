@@ -112,6 +112,7 @@ class GuestRunner(
         }
         e["AEMU64_FB"] = "${img.settings.width}x${img.settings.height}"
         if (img.settings.freeGb > 0) e["AEMU64_FREE_GB"] = img.settings.freeGb.toString()
+        if (img.settings.rootApps) e["AEMU64_ROOT_APPS"] = "1"
         // debugging: run/crash.report makes the runner print pc/lr and their mappings on a fatal signal
         if (File(paths.bin, "crash.report").exists()) e["AEMU64_CRASH"] = "1"
         for (t in userTokens.filter(::isEnvToken)) e[t.substringBefore('=')] = t.substringAfter('=')

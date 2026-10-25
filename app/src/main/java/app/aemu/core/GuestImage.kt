@@ -47,6 +47,8 @@ data class VmSettings(
     val imei: String = "",
     /** extra qemu options; KEY=VALUE tokens are passed as environment variables */
     val qemuArgs: String = "",
+    /** run guest apps (uid >= 10000) as uid 0; off by default, per-image opt-in */
+    val rootApps: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("width", width).put("height", height).put("density", density)
@@ -55,6 +57,7 @@ data class VmSettings(
         .put("showFrame", showFrame).put("showNavBar", showNavBar).put("navKeys", navKeys).put("navSize", navSize)
         .put("keepScreenOn", keepScreenOn).put("showLed", showLed).put("mtMode", mtMode).put("legacyEngine", legacyEngine)
         .put("ramMb", ramMb).put("freeGb", freeGb).put("radio", radio).put("native32", native32).put("imei", imei).put("qemuArgs", qemuArgs)
+        .put("rootApps", rootApps)
 
     companion object {
         const val NAV_DEFAULT = "back,home,recents,menu"
@@ -100,6 +103,7 @@ data class VmSettings(
                 native32 = o.optBoolean("native32", false),
                 imei = o.optString("imei", ""),
                 qemuArgs = o.optString("qemuArgs", ""),
+                rootApps = o.optBoolean("rootApps", false),
             )
         }
     }

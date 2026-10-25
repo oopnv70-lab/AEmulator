@@ -112,6 +112,8 @@
     <string name="vs_dpi">DPI</string>
     <string name="vs_ram">Guest RAM</string>
     <string name="vs_ram_auto">Automatic</string>
+    <string name="vs_root_apps">Root for guest apps</string>
+    <string name="vs_root_apps_sub">Run every guest app as uid 0 (root). Off by default.</string>
     <string name="vs_free_space">Guest free space</string>
     <string name="vs_free_space_auto">Host real value</string>
     <string name="vs_radio_title">Radio</string>
