@@ -353,6 +353,43 @@ static long ion_ioctl(u32 cmd, u64 arg) {
     default: return -25 /*ENOTTY*/;
     }
 }
+// ---------------------------------------------------------------------------------------------- dma-buf heaps
+// 17: the Codec2 clients take their linear buffers from a dma-buf heap, and that has to be the path they take. The
+// image's libion is a stub (every call answers -1, silently), so C2AllocatorIon's constructor never fills mTraits and
+// setUsageMapper dereferences it: a SIGSEGV inside CCodecBufferChannel::start, which takes the calling server down
+// with it (system_server dies while SoundPool decodes its first sound). C2DmaBufAllocator has no such hole - its
+// traits are made before anything is opened - and a heap node is a memfd of ours, a buffer from it another one.
+// vendor/build.prop already asks for that path (debug.c2.use_dmabufheaps=1); it was ignored only because the node it
+// stats ("no system heap. Ignoring override!") did not exist. Nothing enumerates /dev/dma_heap on this path:
+// BufferAllocator::Alloc opens the heap by name, so no getdents is needed here.
+static int is_dma_heap_path(const char *p) {
+    return seq(p, "/dev/dma_heap/system") || seq(p, "/dev/dma_heap/system-uncached");
+}
+static int dma_heap_fd(const char *want, int fd) {
+    char p[40], t[32], d[24];
+    memcpy(p, "/proc/self/fd/", 14);
+    char *n = utoa((u64)fd, d + sizeof d); memcpy(p + 14, n, slen(n) + 1);
+    long r = S4(NR_readlinkat, AT_FDCWD, p, t, sizeof t - 1);
+    if (r <= 0) return 0;
+    t[r] = 0;
+    return pre(t, want);        // a memfd reads back as "/memfd:<name> (deleted)": the name is what counts
+}
+static int is_dma_heap_dev(int fd) { return dma_heap_fd("/memfd:aemu-dmaheapdev", fd); }
+static int is_dma_heap_buf(int fd) { return dma_heap_fd("/memfd:aemu-dmaheambuf", fd); }
+static long dma_heap_ioctl(u32 cmd, u64 arg) {
+    u32 size = (cmd >> 16) & 0x3fff;
+    if (((cmd >> 8) & 0xff) == 'H' && (cmd & 0xff) == 0) {          // DMA_HEAP_IOCTL_ALLOC
+        // { u64 len; u32 fd; u32 fd_flags; u64 heap_flags }
+        if (size != 24 || !arg) return -25 /*ENOTTY*/;
+        long fd = S2(NR_memfd_create, "aemu-dmaheambuf", 1 /*MFD_CLOEXEC*/);
+        if (fd < 0) return fd;
+        long r = S2(NR_ftruncate, fd, *(u64 *)arg);
+        if (r < 0) { S1(NR_close, fd); return r; }
+        *(u32 *)(arg + 8) = (u32)fd;
+        return 0;
+    }
+    return 0;
+}
 
 static long fake_memfile(const char *name, const char *content, u64 len) {
     long fd = S2(NR_memfd_create, name, 1 /*MFD_CLOEXEC*/);
@@ -872,6 +909,8 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
                     return ashmem_open(a[2]);
                 }
                 if (seq(P(1), "/dev/ion")) return S2(NR_memfd_create, "aemu-iondev", (a[2] & 02000000) ? 1 : 0);
+                // the node a dma-buf heap is opened through (C2Store stats it to choose that allocator)
+                if (is_dma_heap_path(P(1))) return S2(NR_memfd_create, "aemu-dmaheapdev", (a[2] & 02000000) ? 1 : 0);
                 if (seq(P(1), "/dev/binder") || seq(P(1), "/dev/hwbinder") || seq(P(1), "/dev/vndbinder")) return binder_open(a[2], P(1));
                 if (pre(P(1), "/dev/input/event")) return input_open(a[2]);
             }
@@ -932,6 +971,14 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
                 memset(st, 0, sizeof *st);
                 st->st_mode = 0020666; // S_IFCHR | 0666
                 st->st_rdev = 0x102; st->st_dev = 6; // one device for the node and every region: Chromium compares st_dev
+                st->st_nlink = 1;
+                return 0;
+            }
+            if (is_dma_heap_path(P(1))) {
+                struct kstat *st = (struct kstat *)a[2];
+                memset(st, 0, sizeof *st);
+                st->st_mode = 0020666;
+                st->st_rdev = 0x104; st->st_dev = 6;
                 st->st_nlink = 1;
                 return 0;
             }
@@ -1010,6 +1057,8 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             if (seq(P(1), "/dev/binder") || seq(P(1), "/dev/hwbinder") || seq(P(1), "/dev/vndbinder") || pre(P(1), "/dev/ashmem")) {
                 return 0;
             }
+            // C2Store stat()s the heap node to pick the allocator: it has to be there (see dma_heap_ioctl)
+            if (is_dma_heap_path(P(1))) return 0;
             u64 pl = slen(P(1));
             if (pre(P(1), "/proc/") && pl >= 13 && seq(P(1) + pl - 13, "/attr/current")) return 0;
             // the shared card is a writable FAT volume to the guest: say yes to every check
@@ -1026,6 +1075,15 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     case NR_mkdirat: case NR_unlinkat: case NR_fchmodat: case NR_utimensat: case NR_mknodat:
     case NR_statx: {
         char *b1 = PB(0);
+        if (nr == NR_statx && a[2] && P(1) && is_dma_heap_path(P(1))) {
+            struct statx *sx = (struct statx *)a[2];
+            memset(sx, 0, sizeof *sx);
+            sx->stx_mode = 0020666;     // S_IFCHR | 0666, as the other device nodes
+            sx->stx_dev_major = 0; sx->stx_dev_minor = 6;
+            sx->stx_rdev_major = 0; sx->stx_rdev_minor = 260;
+            sx->stx_nlink = 1;
+            return 0;
+        }
         NEEDX(1);
         long r = S5(nr, a[0], h1, a[2], a[3], a[4]);
         if (nr == NR_statx && r == 0 && a[2] && g_sdlen && ((P(1) && is_guest_card(P(1))) || is_card_fd((int)a[0]))) {
@@ -1237,6 +1295,9 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     case NR_ioctl:
         if (((a[1] >> 8) & 0xff) == ASHMEM_MAGIC) return ashmem_ioctl((int)a[0], (u32)a[1], (u64)a[2]);
         if (((a[1] >> 8) & 0xff) == 'I' && is_ion_fd((int)a[0])) return ion_ioctl((u32)a[1], (u64)a[2]);
+        if (((a[1] >> 8) & 0xff) == 'H' && is_dma_heap_dev((int)a[0])) return dma_heap_ioctl((u32)a[1], (u64)a[2]);
+        // a buffer from that heap: DMA_BUF_IOCTL_SYNC ('b') and DMA_BUF_SET_NAME, both no-ops on a plain region
+        if (((a[1] >> 8) & 0xff) == 'b' && is_dma_heap_buf((int)a[0])) return 0;
         if (((a[1] >> 8) & 0xff) == 'E' && is_input_fd((int)a[0])) return input_ioctl((u32)a[1], (u64)a[2]);
         if (((u32)a[1] & 0xffffff00u) == 0x4600) return fb_ioctl((u32)a[1], (u64)a[2]);
         if (((a[1] >> 8) & 0xff) == 'b' && is_binder_fd((int)a[0])) return binder_ioctl((int)a[0], (u32)a[1], (u64)a[2]);
