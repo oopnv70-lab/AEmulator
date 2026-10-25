@@ -1751,6 +1751,25 @@ class TreeFixer(
                 |""".trimMargin()
             if (xml.takeIf { it.isFile }?.readText() != text) { xml.writeText(text); xml.setReadable(true, false) }
         }.onFailure { log("audio: failed to write audio_policy_configuration.xml: ${it.message}") }
+        // The odm partition wins over vendor in the policy search order, and a Qualcomm firmware keeps its own
+        // audio_policy_configuration.xml there: the primary module is commented out of it ("Primary Audio HAL is now
+        // hosted in audio_module_config_primary", a sku file the vendor's own HAL reads) and what is left is usb,
+        // r_submix and stub. AudioPolicyManager then loads the module "stub" from the engine's HAL, which does not
+        // have one (audio.stub.so), so it declares no primary output, every strategy gets no device, and every
+        // AudioSystem call answers -19. Set the odm policy aside so vendor/etc (the engine's single module) is read.
+        if (img.engine == Engine.N64 && File(root, "odm/etc").isDirectory) {
+            var n = 0
+            for (rel in listOf("odm/etc/audio/audio_policy_configuration.xml",
+                               "odm/etc/audio_policy_configuration.xml",
+                               "odm/etc/audio/audio_policy_configuration_brm.xml")) {
+                val f = File(root, rel)
+                if (!f.isFile) continue
+                val parked = File(root, "system/.aemu-parked/${rel.replace('/', '#')}")
+                parked.parentFile?.mkdirs()
+                if (!parked.exists() && f.renameTo(parked)) n++
+            }
+            if (n > 0) log("audio: odm audio policy set aside: $n")
+        }
         // AudioFlinger reads vendor/etc/audio_effects.conf before the system one. A vendor's list adds effects for its own
         // amplifier and DSP (Motorola's speaker protection crashed 7.1's audioserver on a null calibration, so AudioFlinger
         // was never published); the engine's HAL is a plain speaker, so the system's AOSP effects are used instead.
