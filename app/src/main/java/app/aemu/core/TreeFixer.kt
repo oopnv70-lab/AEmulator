@@ -1974,12 +1974,28 @@ class TreeFixer(
         // that partition on the phone, and this image was extracted without it.
         runCatching {
             val cust = File(root, "system/etc/thermalFanSound")
-            if (!cust.isDirectory) {
-                cust.mkdirs()
-                // the page plays one of these when the fan starts; empty files keep the player from throwing
-                for (n in listOf("fan_start.mp3", "fan_stop.mp3")) File(cust, n).takeIf { !it.isFile }?.writeBytes(ByteArray(0))
-                log("cooling fans: /system/etc/thermalFanSound added (the drawer's fan switch reads it)")
+            if (!cust.isDirectory) cust.mkdirs()
+            // CoolingFanSoundEffectActivity hard-codes the three system effects it offers
+            // (extremeRacing / sonicTurbine / mechanicalPower .ogg, plus a .webp cover each) and plays them through
+            // getCfgFile("thermalFanSound/" + name) + MediaPlayer. The phone ships them in its cust partition, which
+            // this image was extracted without, so the page lists the items but every preview answers
+            // "sound not found". The image's own ringtone stands in for the media (no binary in the repo).
+            val src = File(root, "system/media/audio/ringtones/Wind.ogg")
+            val cover = File(root, "system/media/audio/cover/Default_Cover_Image.webp")
+            var added = 0
+            for (name in listOf("extremeRacing", "sonicTurbine", "mechanicalPower")) {
+                val ogg = File(cust, "$name.ogg")
+                if (!ogg.isFile && src.isFile) { ogg.writeBytes(src.readBytes()); added++ }
+                val webp = File(cust, "$name.webp")
+                if (!webp.isFile && cover.isFile) { webp.writeBytes(cover.readBytes()); added++ }
             }
+            for (f in cust.listFiles().orEmpty()) {
+                f.setReadable(true, false)
+                f.setExecutable(false, false)
+            }
+            cust.setReadable(true, false)
+            cust.setExecutable(true, false)
+            if (added > 0) log("cooling fans: $added cust sound file(s) added (/system/etc/thermalFanSound)")
         }.onFailure { log("fan cust dir failed: ${it.message}") }
         val fan = File(root, "sys/class/hn_thermal/fan")
         val nodes = mapOf(
