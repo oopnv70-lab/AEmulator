@@ -1979,16 +1979,36 @@ class TreeFixer(
             // (extremeRacing / sonicTurbine / mechanicalPower .ogg, plus a .webp cover each) and plays them through
             // getCfgFile("thermalFanSound/" + name) + MediaPlayer. The phone ships them in its cust partition, which
             // this image was extracted without, so the page lists the items but every preview answers
-            // "sound not found". The image's own ringtone stands in for the media (no binary in the repo).
-            val src = File(root, "system/media/audio/ringtones/Wind.ogg")
+            // "sound not found". Three distinct ringtones of the image stand in for the media (no binary in the repo):
+            // they have to differ, or a preview that always played the first one would sound exactly right.
+            val stand = mapOf(
+                "extremeRacing" to "system/media/audio/alarms/Iron_Melody.ogg",
+                "sonicTurbine" to "system/media/audio/alarms/Chasing_Wind.ogg",
+                "mechanicalPower" to "system/media/audio/alarms/Go_Beyond_Electronic.ogg",
+            )
             val cover = File(root, "system/media/audio/cover/Default_Cover_Image.webp")
+            // A note of what was written, so that three files of our own making are replaced when the stand-ins change
+            // while three files a real cust partition provided are left alone. Images written before the note existed
+            // are recognised by the three being byte-identical, which no real set of them is.
+            val mark = File(cust, ".aemu-standin")
+            val oggs = stand.keys.map { File(cust, "$it.ogg") }
+            val ours = (mark.isFile && mark.readText().trim() == "3") ||
+                (oggs.all { it.isFile } && oggs.drop(1).all { it.length() == oggs[0].length() && it.readBytes().contentEquals(oggs[0].readBytes()) })
             var added = 0
-            for (name in listOf("extremeRacing", "sonicTurbine", "mechanicalPower")) {
+            for ((name, rel) in stand) {
+                val src = File(root, rel)
                 val ogg = File(cust, "$name.ogg")
-                if (!ogg.isFile && src.isFile) { ogg.writeBytes(src.readBytes()); added++ }
+                if (!src.isFile) continue
+                if (ogg.isFile && !ours) continue
+                val bytes = src.readBytes()
+                if (ogg.isFile && ogg.readBytes().contentEquals(bytes)) continue   // already the stand-in asked for
+                ogg.writeBytes(bytes); added++
+            }
+            for (name in stand.keys) {
                 val webp = File(cust, "$name.webp")
                 if (!webp.isFile && cover.isFile) { webp.writeBytes(cover.readBytes()); added++ }
             }
+            if (added > 0) mark.writeText("3\n")
             for (f in cust.listFiles().orEmpty()) {
                 f.setReadable(true, false)
                 f.setExecutable(false, false)
