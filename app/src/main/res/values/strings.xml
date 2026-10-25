@@ -112,8 +112,6 @@
     <string name="vs_dpi">DPI</string>
     <string name="vs_ram">Guest RAM</string>
     <string name="vs_ram_auto">Automatic</string>
-    <string name="vs_root_pkg">Root package</string>
-    <string name="vs_root_pkg_sub">Package to run as uid 0 (root). Only this app, others keep their own uid. Blank = off.</string>
     <string name="vs_free_space">Guest free space</string>
     <string name="vs_free_space_auto">Host real value</string>
     <string name="vs_radio_title">Radio</string>

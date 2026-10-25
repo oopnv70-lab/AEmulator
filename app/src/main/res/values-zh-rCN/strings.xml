@@ -45,8 +45,6 @@
     <string name="vs_legacy_sub">旧版 Desire HD 引擎：仅 GLES 1.x，480×800 屏幕。主引擎失败时使用。</string>
     <string name="vs_lowram">低内存模式</string>
     <string name="vs_lowram_sub">ro.config.low_ram — 系统节省内存。</string>
-    <string name="vs_root_pkg">Root 包名</string>
-    <string name="vs_root_pkg_sub">以 uid 0（root）运行的应用包名。仅此应用，其余保持自身 uid。留空 = 关闭。</string>
     <string name="vs_proxy">现代 TLS 代理</string>
     <string name="vs_proxy_sub">让旧浏览器和应用打开如今的 HTTPS 网站。</string>
     <string name="vs_controls">操作</string>
