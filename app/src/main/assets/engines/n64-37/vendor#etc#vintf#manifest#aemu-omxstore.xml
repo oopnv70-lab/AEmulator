@@ -1,0 +1,16 @@
+<!-- IOmxStore with no OMX codec, hosted by /system/bin/aemu-omxstore. libstagefright's OmxInfoBuilder returns -19
+     and MediaCodecList is never built without one ("Cannot find an IOmxStore service"), which takes every decoder
+     away from every app. An empty store is a legal answer ("this machine has no OMX component"): the software codecs
+     come from Codec2 (media.swcodec). IOmx is declared nowhere - no program serves it, and a declared but unregistered
+     HIDL service is waited for forever (XCOLLIE kills mediaserver inside MediaPlayer's setDataSource). -->
+<manifest version="1.0" type="device">
+    <hal format="hidl">
+        <name>android.hardware.media.omx</name>
+        <transport>hwbinder</transport>
+        <version>1.0</version>
+        <interface>
+            <name>IOmxStore</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+</manifest>
