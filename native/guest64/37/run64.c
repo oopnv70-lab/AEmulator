@@ -258,6 +258,8 @@ static void fake_card(struct kstat *st) {
 // by its descriptor, without a call (g_ashfd). One that came from another process still needs the name; a mark on
 // the region itself is not possible (fchmod of a memfd: EACCES on the phone). A refusal is said once per process.
 static unsigned char g_ashfd[1024];
+static unsigned char g_cardfd[1024];           // an opened descriptor is the shared card folder or a file inside it
+static unsigned char g_cardd[1024];            // ...and the descriptor is that folder itself (opened with O_DIRECTORY)
 static int g_ashsaid;
 static void ash_note(int bit, const char *what, long r) {
     if (g_ashsaid & bit) return;
@@ -280,6 +282,18 @@ static int is_ashmem_fd(int fd) {
     if (r < 18) return 0;
     t[r] = 0;
     return pre(t, "/memfd:aemu-ashmem");
+}
+static void card_note(int fd, int is_dir) {
+    if (fd >= 0 && fd < (int)sizeof g_cardfd) {
+        g_cardfd[fd] = 1;
+        if (is_dir) g_cardd[fd] = 1;
+    }
+}
+static int is_card_fd(int fd) {
+    return fd >= 0 && fd < (int)sizeof g_cardfd && g_cardfd[fd];
+}
+static int is_card_dir_fd(int fd) {
+    return fd >= 0 && fd < (int)sizeof g_cardd && g_cardd[fd];
 }
 
 static long ashmem_ioctl(int fd, u32 cmd, u64 arg) {
@@ -903,7 +917,9 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             if (g_selinux && seq(P(1), "/sys/fs/selinux/deny_unknown")) return fake_memfile("aemu-deny", "0\n", 2);
         }
         NEEDX(1);
-        return S4(nr, a[0], h1, a[2], a[3]);
+        long r = S4(nr, a[0], h1, a[2], a[3]);
+        if (r >= 0 && g_sdlen && P(1) && is_guest_card(P(1))) card_note((int)r, (a[2] & 0200000) != 0);
+        return r;
     }
     case NR_newfstatat: {
         // fstat as newer C libraries make it (qemu-arm's does): the same answers as for fstat
@@ -950,7 +966,7 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             struct kstat *st = (struct kstat *)a[2];
             fake_owner(st);
             // the shared card folder is a FAT volume to the guest (see fake_card)
-            if (g_sdlen && P(1) && is_guest_card(P(1))) fake_card(st);
+            if (g_sdlen && ((P(1) && is_guest_card(P(1))) || is_card_fd((int)a[0]))) fake_card(st);
             // an app's own data belongs to the app (the class loader refuses an oat directory of another owner)
             u32 own[2];
             if (a[1] && pre(P(1), "/data/") && S4((a[3] & 0x100) ? NR_lgetxattr : NR_getxattr, h1, OWN_ATTR, own, sizeof own) == sizeof own) {
@@ -984,6 +1000,7 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
                 st->st_mode = 0020666; st->st_rdev = 0x103;
             }
             fake_owner(st);
+            if (g_sdlen && is_card_fd((int)a[0])) fake_card(st);
         }
         return r;
     }
@@ -996,7 +1013,7 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             u64 pl = slen(P(1));
             if (pre(P(1), "/proc/") && pl >= 13 && seq(P(1) + pl - 13, "/attr/current")) return 0;
             // the shared card is a writable FAT volume to the guest: say yes to every check
-            if (g_sdlen && is_guest_card(P(1))) return 0;
+            if (g_sdlen && (is_guest_card(P(1)) || (a[0] != AT_FDCWD && is_card_dir_fd((int)a[0])))) return 0;
             // 14: ART refuses to load a dex file the app could write ("Writable dex file ... is not allowed"); every
             // file of the image is the host app's own, so what a phone keeps read-only for apps reads as such
             if ((a[2] & 2) && g_uid != 0 && (g_uid >= 10000 || !pre(P(1), "/data/")) && (pre(P(1), "/system/") || pre(P(1), "/system_ext/") || pre(P(1), "/product/")
@@ -1011,7 +1028,7 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
         char *b1 = PB(0);
         NEEDX(1);
         long r = S5(nr, a[0], h1, a[2], a[3], a[4]);
-        if (nr == NR_statx && r == 0 && a[2] && g_sdlen && P(1) && is_guest_card(P(1))) {
+        if (nr == NR_statx && r == 0 && a[2] && g_sdlen && ((P(1) && is_guest_card(P(1))) || is_card_fd((int)a[0]))) {
             struct statx *sx = (struct statx *)a[2];
             u32 m = sx->stx_mode;
             if ((m & 0170000) == 0040000) sx->stx_mode = 0040777;
@@ -1204,12 +1221,15 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             if (S2(NR_fstat, a[1], &st) == 0 && st.st_ino == g_logino && st.st_dev == g_logdev &&
                 S2(NR_fstat, a[0], &st) == 0 && (st.st_mode & 0170000) == 0020000 && st.st_rdev == 0x103) return a[1];
         }
-        return S3(nr, a[0], a[1], a[2]);
+        long r = S3(nr, a[0], a[1], a[2]);
+        if (r >= 0 && is_card_fd((int)a[0])) card_note((int)r, is_card_dir_fd((int)a[0]));
+        return r;
     }
     case NR_close: {
         if (is_nl_fd((int)a[0])) nl_close((int)a[0]);
         if (is_binder_fd((int)a[0])) binder_closed((int)a[0]);
         if (a[0] < sizeof g_ashfd) g_ashfd[a[0]] = 0;
+        if (a[0] < sizeof g_cardfd) { g_cardfd[a[0]] = 0; g_cardd[a[0]] = 0; }
         return S1(nr, a[0]);
     }
     case NR_execve:
