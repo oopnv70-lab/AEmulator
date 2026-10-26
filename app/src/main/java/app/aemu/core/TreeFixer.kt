@@ -135,6 +135,9 @@ class TreeFixer(
         caCerts()
         audioPolicy()
         qtaguid()
+        // (before prefer64: with app_process32 gone the guest declares arm64 only, and that is what makes the
+        // provider's use32bitAbi="true" end up as arm64 rather than armeabi-v7a)
+        parkAppProcess32()
         if (engine == Engine.N64 && kernel.webView64) for (dir in listOf("product/app", "system/app", "system/product/app", "system_ext/app"))
             File(root, dir).listFiles().orEmpty().filter { it.isDirectory && it.name.contains("webview", true) }
                 .flatMap { it.listFiles().orEmpty().filter { f -> f.isFile && f.name.endsWith(".apk") } }
@@ -362,6 +365,39 @@ class TreeFixer(
             if (f.renameTo(dst)) log("QTI AIDL camera provider set aside (${f.name})")
         }
     }
+
+    /**
+     * The system WebView of a 64-bit firmware declares android:use32bitAbi="true", and the package manager then
+     * makes armeabi-v7a its primary ABI: the renderer processes are started from the 32-bit zygote, which the
+     * native arm64 engine cannot run (its SELinux calls are not there). [WebView64.prefer64] would flip that one
+     * boolean, but the entry is deflated at level 9 with no room to spare, so the rewritten manifest does not fit
+     * and nothing is changed; a rebuild of the APK is not an option either, as the v2/v3 block that signs it covers
+     * every byte and the package manager drops an unsigned package.
+     *
+     * It is the ABI list of the guest that decides, though: with no 32-bit ABI declared, use32bitAbi has nothing
+     * to fall back to and the package's own armeabi-v7a library set is ignored, leaving arm64-v8a as the primary
+     * ABI - the renderers become native 64-bit processes. [GuestVm] derives that list from n64Has32, which is
+     * "libqemu_arm.so is there and system/bin/app_process32 exists": taking the 32-bit app_process aside turns the
+     * guest into a 64-bit-only device, and the engine then starts no zygote_secondary at all.
+     *
+     * Nothing on a 32-bit program is lost that worked before - the secondary zygote never started here.
+     */
+    private fun parkAppProcess32() {
+        if (engine != Engine.N64 || !kernel.webView64) return
+        if (!hasWebViewProvider()) return
+        val f = File(root, "system/bin/app_process32")
+        if (!f.exists()) return
+        val parked = File(root, "system/.aemu-parked").apply { mkdirs() }
+        val dst = File(parked, "system#bin#app_process32")
+        if (dst.exists()) ImageStore.wipe(dst)
+        if (f.renameTo(dst)) log("32-bit app_process set aside: the guest declares arm64 only, so WebView's renderers are native 64-bit")
+    }
+
+    /** a WebView provider is in the tree: what parkAppProcess32 is for */
+    private fun hasWebViewProvider(): Boolean =
+        listOf("product/app", "system/app", "system/product/app", "system_ext/app").any { dir ->
+            File(root, dir).listFiles().orEmpty().any { it.isDirectory && it.name.contains("webview", true) }
+        }
 
     /** Native arm64 engine: its HALs and libraries are arm64 files from assets/engines/n64-<kernel> (each kernel has its own copy), named "a#b#c" for a/b/c. */
     /** the firmware's libgui checks queued buffers for the handle of Samsung's Exynos gralloc */
