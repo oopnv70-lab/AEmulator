@@ -1176,7 +1176,7 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
         disableHonorTeeComponents()
         // a sideloaded app that bundles OpenSSL keeps colliding with the platform's libcrypto, which stopped being
         // OpenSSL 1.x: give its copy private sonames so it loads at all
-        runCatching { Sideload.fixSonames(paths.root) }
+        runCatching { Sideload.fixSonames(paths.root) { log("$it") } }
         if (img.api !in 9..16) return
         val marker = File(paths.root, "data/.aemu-components-disabled2")
         if (marker.isFile) return

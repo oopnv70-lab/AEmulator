@@ -212,7 +212,7 @@ object Sideload {
                 }
             }
         }.onFailure { log("sideload: libraries: ${it.message}") }
-        if (libs > 0) runCatching { privateSonames(libDir) }.onFailure { log("sideload: sonames: ${it.message}") }
+        if (libs > 0) runCatching { privateSonames(libDir, log) }.onFailure { log("sideload: sonames: ${it.message}") }
 
         log("sideload: $pkg → ${dir.relativeTo(root).path} ($libs native libraries)")
         return Outcome(true, pkg, dir.relativeTo(root).path, libs, "placed $pkg")
@@ -225,7 +225,7 @@ object Sideload {
      * be rebuilt, and the libraries keep resolving each other. Files are renamed to match so the directory tells the
      * truth, and the originals are dropped - nothing in the set references them any more.
      */
-    private fun privateSonames(libDir: File) {
+    private fun privateSonames(libDir: File, log: (String) -> Unit = {}) {
         var hit = 0
         for (f in libDir.listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".so") }) {
             val bytes = runCatching { f.readBytes() }.getOrNull() ?: continue
@@ -274,11 +274,11 @@ object Sideload {
      * Re-apply the soname fix to packages that were already in the image before it existed. Runs at start, is a
      * no-op once every .so has been rewritten, so it costs a directory listing on a healthy image.
      */
-    fun fixSonames(root: File) {
+    fun fixSonames(root: File, log: (String) -> Unit = {}) {
         for (d in placed(root)) {
             val libDir = File(d, "lib/arm64")
             if (!libDir.isDirectory) continue
-            runCatching { privateSonames(libDir) }.onFailure { log("sideload: sonames in ${d.name}: ${it.message}") }
+            runCatching { privateSonames(libDir, log) }.onFailure { log("sideload: sonames in ${d.name}: ${it.message}") }
         }
     }
 
