@@ -1172,6 +1172,8 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
      * "Unknown exception code" and a "has stopped" dialog on every boot. Nothing here needs network location.
      */
     private fun disableBrokenComponents() {
+        // MagicOS (Honor): a set of vendor services reach the TEE, which a container has no way to provide
+        disableHonorTeeComponents()
         if (img.api !in 9..16) return
         val marker = File(paths.root, "data/.aemu-components-disabled2")
         if (marker.isFile) return
@@ -1184,6 +1186,38 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
         // PATH of 2.3–4.x starts with /sbin: the pm script's "app_process" is then looked up there and qemu gives up
         for (c in list) runCatching { guestRunner.run(listOf("/system/bin/sh", "-c", "export PATH=/system/bin:/system/xbin:\$PATH; pm disable $c"), 120_000) }
         runCatching { marker.writeText("1") }
+    }
+
+    /**
+     * MagicOS 17 (Honor): HnSecurityServer and HnNearby call the trusted execution environment for their key and
+     * anti-theft work. A container has no TEE - libteec-aidl aborts with TzNotAvailable on start, vendor.secretkeeper
+     * exits the same way - so those calls never return and the platform waits out its service timeout: an ANR every
+     * 20 to 200 seconds for the life of the session (42 recorded in one, all of them this), plus a stream of them for
+     * HnNearby's DualLinkService and DeviceMonitorService. None of it belongs to a feature that works here
+     * (fingerprint, face, secure keyboard are all dead anyway), and stopping the components is what stops the loop.
+     *
+     * Components rather than whole packages: the rest of HnSecurityServer (the security centre UI) keeps working, and
+     * so does the rest of HnNearby. Each name comes from an ANR record of this image, not from guesswork.
+     */
+    private fun disableHonorTeeComponents() {
+        if (engine != Engine.N64) return
+        // only a firmware that has them: the vendor's own packages, not a generic system image
+        if (!File(paths.root, "system_ext/app/HnSecurityServer/HnSecurityServer.apk").isFile) return
+        val marker = File(paths.root, "data/.aemu-tee-components-disabled")
+        if (marker.isFile) return
+        val list = listOf(
+            "com.hihonor.securityserver/.service.HnAntiTheftDetectionService",
+            "com.hihonor.securityserver/.safetyctrl.SafetyCtrlService",
+            "com.hihonor.securityserver/.service.HnUniKeystoreService",
+            "com.hihonor.nearby/com.hihonor.duallink.service.DualLinkService",
+            "com.hihonor.nearby/com.hihonor.hwddmp.service.DeviceMonitorService",
+            "com.hihonor.nearby/.NearbyService",
+        )
+        for (c in list) runCatching {
+            guestRunner.run(listOf("/system/bin/sh", "-c", "export PATH=/system/bin:/system/xbin:\$PATH; pm disable $c"), 120_000)
+        }
+        runCatching { marker.writeText("1") }
+        log("MagicOS: TEE-dependent security/nearby services switched off (no TEE in a container)")
     }
 
     /** qemu maps a guest path into the tree only if the file exists there, so the shim's request file is pre-made */
