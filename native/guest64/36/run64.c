@@ -41,7 +41,7 @@ enum {
     NR_prctl = 167, NR_getpid = 172, NR_getuid = 174, NR_geteuid = 175, NR_getgid = 176, NR_getegid = 177, NR_gettid = 178,
     NR_socket = 198, NR_socketpair = 199, NR_bind = 200, NR_connect = 203, NR_getsockname = 204, NR_sendto = 206, NR_setsockopt = 208, NR_getsockopt = 209,
     NR_shutdown = 210, NR_sendmsg = 211, NR_recvmsg = 212, NR_munmap = 215, NR_execve = 221, NR_mmap = 222, NR_mprotect = 226,
-    NR_renameat2 = 276, NR_memfd_create = 279, NR_statx = 291,
+    NR_renameat2 = 276, NR_memfd_create = 279, NR_getdents64 = 61, NR_kill = 129, NR_statx = 291,
 };
 
 #define AT_FDCWD (-100)
@@ -320,6 +320,184 @@ static long fake_memfile(const char *name, const char *content, u64 len) {
     return fd;
 }
 
+// ---------------------------------------------------------------- cgroup control files (used by the openat case)
+// system_server's libprocessgroup ends a task through these files: it writes "1" to cgroup.kill (then reads
+// cgroup.events to learn that the group is empty), or it reads the pids listed in cgroup.procs and sends them a
+// signal itself. The image has the directories, made by init, but never the files - so the write went nowhere and
+// the read found nobody, and a task swiped off the recents list went on running (its card was dropped from the
+// list all the same). Each file is a memory file of its own now: cgroup.procs holds the pids that are in its
+// directory, cgroup.events says the group is empty, and cgroup.kill is looked at again when its descriptor is
+// closed (close is one of the trapped calls). Guest and host pids are the same number here - this program does not
+// translate them - so the signal is that same call.
+static char *pb_get(void);          // the path pool (defined further down, next to the trap handler)
+static void pb_put(char *b);
+struct cg_dirent { u64 d_ino; i64 d_off; u16 d_reclen; u8 d_type; char d_name[]; };
+enum { CG_PROCS = 1, CG_KILL, CG_EVENTS, CG_PLAIN };
+#define CG_NOTCTL (-1000)         // not a control file of a group: the openat case takes the ordinary path
+#define CG_SLOTS 16
+struct cg_slot { int fd, kind, pid; char dir[200]; };
+static struct cg_slot g_cg[CG_SLOTS];
+static int cg_of(const char *p, u64 n, const char *tag) {
+    int v = 0; u64 t = slen(tag);
+    for (u64 i = 0; i + t < n; i++) if ((i == 0 || p[i - 1] == '/') && pre(p + i, tag)) v = (int)atou(p + i + t);
+    return v;
+}
+// the pids of one group directory: its pid_NNN entries, or the one pid when the directory is a pid_ one
+static u64 cg_pids(const char *dir, int pid, char *out, u64 cap) {
+    u64 o = 0; char t[24];
+    if (pid > 0) {
+        char *e = utoa((u64)pid, t + sizeof t); u64 n = slen(e);
+        if (n + 1 > cap) return 0;
+        memcpy(out, e, n); out[n] = '\n';
+        return n + 1;
+    }
+    long fd = S4(NR_openat, AT_FDCWD, dir, 0200000 /*O_RDONLY|O_DIRECTORY*/, 0);
+    if (fd < 0) return 0;
+    char buf[1024];
+    for (;;) {
+        long n = S3(NR_getdents64, fd, (long)buf, sizeof buf);
+        if (n <= 0) break;
+        for (long b = 0; b < n; ) {
+            struct cg_dirent *d = (struct cg_dirent *)(buf + b);
+            if (!d->d_reclen) { b = n; break; }
+            b += d->d_reclen;
+            if (!pre(d->d_name, "pid_") || d->d_name[4] < '1') continue;
+            char *e = utoa(atou(d->d_name + 4), t + sizeof t); u64 l = slen(e);
+            if (o + l + 1 > cap) { S1(NR_close, fd); return o; }
+            memcpy(out + o, e, l); o += l; out[o++] = '\n';
+        }
+    }
+    S1(NR_close, fd);
+    return o;
+}
+// SIGKILL one process, and the children it leaves behind (a renderer, a codec): the group is not in the kernel's
+// reach here, so they are looked up under /proc. The number must still be the program that was started - pids are
+// reused, and a group that has already gone must stay gone.
+static void cg_kill(int pid) {
+    if (pid <= 1 || !g_self[0]) return;
+    char *pb = pb_get();
+    char *exe = pb, *pth = pb + PATH_MAX, *kids = pb + 2 * PATH_MAX;
+    char d[24], p[48];
+    char *e = utoa((u64)pid, d + sizeof d);
+    u64 el = slen(e);
+    memcpy(p, "/proc/", 6); memcpy(p + 6, e, el);
+    u64 pl = 6 + el;
+    memcpy(p + pl, "/exe", 5);
+    long r = S4(NR_readlinkat, AT_FDCWD, p, exe, PATH_MAX - 1);
+    if (r <= 0) { pb_put(pb); return; }
+    exe[r] = 0;
+    if (!seq(exe, g_self)) { pb_put(pb); return; }
+    int k[16], nk = 0;
+    memcpy(p + pl, "/task", 6);
+    long dfd = S4(NR_openat, AT_FDCWD, p, 0200000, 0);
+    if (dfd >= 0) {
+        char buf[512];
+        for (;;) {
+            long n = S3(NR_getdents64, dfd, (long)buf, sizeof buf);
+            if (n <= 0) break;
+            for (long b = 0; b < n && nk < 16; ) {
+                struct cg_dirent *q = (struct cg_dirent *)(buf + b);
+                if (!q->d_reclen) { b = n; break; }
+                b += q->d_reclen;
+                if (q->d_name[0] < '1' || q->d_name[0] > '9') continue;
+                u64 ql = slen(q->d_name);
+                if (pl + 6 + ql + 10 >= PATH_MAX) continue;
+                memcpy(pth, p, pl); memcpy(pth + pl, "/task/", 6);
+                memcpy(pth + pl + 6, q->d_name, ql);
+                memcpy(pth + pl + 6 + ql, "/children", 10);
+                long cf = S4(NR_openat, AT_FDCWD, pth, 0200000, 0);
+                if (cf < 0) continue;
+                long m = S3(NR_read, cf, kids, PATH_MAX - 1);
+                S1(NR_close, cf);
+                if (m <= 0) continue;
+                kids[m] = 0;
+                for (const char *c = kids; *c && nk < 16; ) {
+                    while (*c == ' ') c++;
+                    if (*c < '1' || *c > '9') break;
+                    k[nk++] = (int)atou(c);
+                    while (*c >= '0' && *c <= '9') c++;
+                }
+            }
+        }
+        S1(NR_close, dfd);
+    }
+    pb_put(pb);
+    for (int i = 0; i < nk; i++) S2(NR_kill, k[i], 9 /*SIGKILL*/);
+    S2(NR_kill, pid, 9 /*SIGKILL*/);
+}
+// a control file of a group directory: a memory file the guest reads back. -2 when this is not one of them (the
+// caller takes the ordinary path then), a negative errno when no descriptor can be given. gp is the guest path and
+// dl the length of its directory part (the leaf is cut off).
+static long cg_open(const char *gp, u64 dl, const char *leaf, long flags, char *pb) {
+    int kind;
+    if (seq(leaf, "cgroup.procs")) kind = CG_PROCS;
+    else if (seq(leaf, "cgroup.kill")) kind = CG_KILL;
+    else if (seq(leaf, "cgroup.events")) kind = CG_EVENTS;
+    else if (pre(leaf, "cgroup.")) kind = CG_PLAIN;
+    else return CG_NOTCTL;
+    u64 n = dl;
+    while (n && gp[n - 1] == '/') n--;
+    if (!n || n >= 190) return CG_NOTCTL;
+    char gd[PATH_MAX];
+    memcpy(gd, gp, n); gd[n] = 0;
+    int err = 0;
+    const char *hd = xl(gd, pb, &err);            // that directory on the phone
+    if (!hd) return CG_NOTCTL;
+    int pid = cg_of(gd, n, "pid_");
+    char *out = pb + PATH_MAX;
+    u64 len = 0;
+    const char *txt = 0;
+    if (kind == CG_EVENTS) { txt = "populated 0\n"; len = 12; }
+    else if (kind == CG_PROCS && (flags & 3) != 1) {   // opened for reading: the pids of that group
+        len = cg_pids(hd, pid, out, PATH_MAX);
+        txt = out;
+    }
+    long fd;
+    if (txt) { fd = fake_memfile("aemu-cgroup", txt, len); if (fd < 0) return fd; }
+    else { fd = S2(NR_memfd_create, "aemu-cgroup", 1 /*MFD_CLOEXEC*/); if (fd < 0) return fd; }
+    if (kind == CG_KILL) {
+        struct cg_slot *s = 0;
+        for (int i = 0; i < CG_SLOTS && !s; i++) if (!g_cg[i].kind) s = &g_cg[i];
+        if (!s) { S1(NR_close, fd); return -24 /*EMFILE*/; }
+        s->fd = (int)fd; s->kind = kind; s->pid = pid;
+        u64 hl = slen(hd);
+        if (hl >= sizeof s->dir) hl = sizeof s->dir - 1;
+        memcpy(s->dir, hd, hl); s->dir[hl] = 0;
+    }
+    return fd;
+}
+// "1" was written to cgroup.kill: end every process of that group
+static void cg_closed(int fd) {
+    struct cg_slot *s = 0;
+    for (int i = 0; i < CG_SLOTS && !s; i++) if (g_cg[i].kind && g_cg[i].fd == fd) s = &g_cg[i];
+    if (!s) return;
+    char b[16];
+    long n = S4(NR_pread64, fd, b, sizeof b - 1, 0);
+    int armed = 0;
+    if (n > 0) { for (long i = 0; i < n; i++) if (b[i] == '1') armed = 1; }
+    char dir[200];
+    memcpy(dir, s->dir, sizeof dir); dir[sizeof dir - 1] = 0;
+    int pid = s->pid;
+    s->kind = 0; s->fd = -1; s->pid = 0; s->dir[0] = 0;
+    if (!armed) return;
+    if (pid > 0) { cg_kill(pid); return; }
+    long dfd = S4(NR_openat, AT_FDCWD, dir, 0200000, 0);
+    if (dfd < 0) return;
+    int ps[32], np = 0;
+    char buf[1024];
+    for (;;) {
+        long m = S3(NR_getdents64, dfd, (long)buf, sizeof buf);
+        if (m <= 0) break;
+        for (long o = 0; o < m && np < 32; ) {
+            struct cg_dirent *q = (struct cg_dirent *)(buf + o);
+            if (!q->d_reclen) { o = m; break; }
+            o += q->d_reclen;
+            if (pre(q->d_name, "pid_") && q->d_name[4] >= '1') ps[np++] = (int)atou(q->d_name + 4);
+        }
+    }
+    S1(NR_close, dfd);
+    for (int i = 0; i < np; i++) cg_kill(ps[i]);
+}
 // ---------------------------------------------------------------------------------------------------- memory budget
 // /proc/meminfo scaled to the RAM the image is given (<root>/dev/.aemu-ram, in kB): the guest would otherwise see all
 // of the phone's memory and size its background by it (ColorOS 14 on a 12 GB phone: 128 cached processes, 150 in
@@ -817,12 +995,19 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             // /dev/null (no section: the built-in configuration without the modules' libraries, "library not found"
             // for everything that lives in an APEX).
             if (!g_is32 && g_exe[0] && seq(P(1), "/proc/self/exe")) { const char *h = xl(g_exe, b1, &err); if (h) return S4(nr, AT_FDCWD, h, a[2], a[3]); }
-            // the control files of those cgroup directories: nothing is in a group (killProcessGroup has no one
-            // to wait for), writes are taken, and the directories stay empty for rmdir
+            // the control files of those cgroup directories: the directories are the image's (init makes them),
+            // the files were never there. A file the guest opens now is a memory file (cg_open), so cgroup.procs
+            // lists the pids of the group and cgroup.kill is taken up when it is closed - which is how
+            // KillProcessGroup ends a task that was swiped off the recents list. The other names under there stay
+            // as they were: writes to /dev/null, so rmdir of an empty group still works.
             if (pre(P(1), "/sys/fs/cgroup/")) {
-                const char *l = P(1);
-                for (const char *c = P(1); *c; c++) if (*c == '/' && c[1]) l = c + 1;
-                if (!pre(l, "uid_") && !pre(l, "pid_") && l[0] != '.') return S4(NR_openat, AT_FDCWD, "/dev/null", a[2] & 02000003, 0);
+                const char *w = P(1);
+                for (const char *c = P(1); *c; c++) if (*c == '/' && c[1]) w = c + 1;    // its last name
+                if (!pre(w, "uid_") && !pre(w, "pid_") && w[0] != '.') {
+                    long cr = cg_open(P(1), (u64)(w - P(1)), w, a[2], PB(1));
+                    if (cr != CG_NOTCTL) return cr;
+                    return S4(NR_openat, AT_FDCWD, "/dev/null", a[2] & 02000003, 0);
+                }
             }
             if (P(1)[0] == '/' && P(1)[1] == 'd') {
                 if (pre(P(1), "/dev/ashmem")) {
@@ -1135,6 +1320,7 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     case NR_close: {
         if (is_nl_fd((int)a[0])) nl_close((int)a[0]);
         if (is_binder_fd((int)a[0])) binder_closed((int)a[0]);
+        cg_closed((int)a[0]);
         if (a[0] < sizeof g_ashfd) g_ashfd[a[0]] = 0;
         return S1(nr, a[0]);
     }
