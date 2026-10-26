@@ -117,6 +117,7 @@ class TreeFixer(
         parkWhetstone()
         parkQcomServices()
         parkQtiCameraProvider()
+        parkQtiAudioHal()
         swapMtkAudioHal()
         eglConfig(img.settings.gpu)
         makeDataDirs()
@@ -360,6 +361,36 @@ class TreeFixer(
             val dst = File(parked, rel.replace('/', '#'))
             if (dst.exists()) ImageStore.wipe(dst)
             if (f.renameTo(dst)) log("QTI AIDL camera provider set aside (${f.name})")
+        }
+    }
+
+    /**
+     * Honor MagicOS 17 (API 37): the QTI AIDL audio HAL (audiohalservice.qti) never reaches a running state here.
+     * Its own health checker thread counts the HAL's start-up against a 30 s deadline and aborts the process with
+     * "AHAL init timed out after 30 Seconds. Current StubMode: DISABLED. Will retry no" (SIGABRT, reported as
+     * exit code 127); its rc then restarts it, and it dies again, up to the 12 restarts init allows. The reason is
+     * that the QTI stack waits for ADSP/AGM hardware that the engine does not emulate. Its fail-safe stub
+     * (persist.vendor.audio.hal.stubmode, libhal_stub.so) does not help either: it gets past the deadline but then
+     * aborts in convertCollectionToAidl (BAD_VALUE), so nothing is gained.
+     *
+     * The firmware also carries the plain HIDL audio HAL (android.hardware.audio.service, rc
+     * android.hardware.audio.service.rc), which starts fine and is what audioserver talks to. Set the QTI AIDL
+     * service aside and let the HIDL one serve the guest: no more restart loop, audio still works.
+     */
+    private fun parkQtiAudioHal() {
+        if (engine != Engine.N64) return
+        val parked = File(root, "system/.aemu-parked").apply { mkdirs() }
+        for (rel in listOf(
+            "vendor/etc/init/audiohalservice_qti.rc",
+            "vendor/bin/hw/audiohalservice.qti",
+            "vendor/lib64/libhal_stub.so",
+            "vendor/lib/libhal_stub.so",
+        )) {
+            val f = File(root, rel)
+            if (!f.exists() && !isLink(f)) continue
+            val dst = File(parked, rel.replace('/', '#'))
+            if (dst.exists()) ImageStore.wipe(dst)
+            if (f.renameTo(dst)) log("QTI AIDL audio HAL set aside (${f.name})")
         }
     }
 
