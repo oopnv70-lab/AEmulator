@@ -663,6 +663,31 @@ static void nl_close(int fd) {
         }
     }
 }
+// QRTR (AF_QIPCRTR, 42): the QMI transport to the modem. The phone's kernel keeps the family to its own qrtr domain,
+// so a socket of it is refused to everything else ("socket(AF_QIPCRTR): Permission denied", which is what made
+// hlosminkdaemon give up and take MinkIPC - and with it iaware's task cleaner - down with it). There is no modem
+// behind this image and no QRTR bus to publish a name on, so the descriptor is one end of a socket pair: the calls
+// that open, bind and talk to it go through, and a service that waits for a peer waits for one that never comes.
+#define MAX_QRTR 8
+static struct { int fd, peer; } g_qrtr[MAX_QRTR];
+static void qrtr_register(int fd, int peer) {
+    for (int i = 0; i < MAX_QRTR; i++) {
+        if (!g_qrtr[i].fd) { g_qrtr[i].fd = fd; g_qrtr[i].peer = peer; return; }
+    }
+}
+static int is_qrtr_fd(int fd) {
+    for (int i = 0; i < MAX_QRTR; i++) if (g_qrtr[i].fd == fd) return 1;
+    return 0;
+}
+static void qrtr_close(int fd) {
+    for (int i = 0; i < MAX_QRTR; i++) {
+        if (g_qrtr[i].fd == fd) {
+            if (g_qrtr[i].peer >= 0) S1(NR_close, g_qrtr[i].peer);
+            g_qrtr[i].fd = 0;
+            g_qrtr[i].peer = -1;
+        }
+    }
+}
 
 // Every request gets the answer that lets its sender go on: a dump ends at once (nothing to list), a request that
 // asked for an acknowledgement gets it, and one that only waits for data (family lookups) is told "not supported".
@@ -1282,6 +1307,9 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     }
     case NR_bind: case NR_connect:
         if (is_nl_fd((int)a[0])) return 0;
+        // QRTR: binding publishes a name on the modem's bus, connecting looks one up. Neither exists here, and the
+        // daemon only needs the call to come back without an error.
+        if (is_qrtr_fd((int)a[0])) return 0;
         if (a[1] && *(u16 *)a[1] == 16) {           // a real netlink socket: binding to groups is not for an app
             long r = S3(nr, a[0], a[1], a[2]);
             return r < 0 && nr == NR_bind ? 0 : r;
@@ -1319,6 +1347,7 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     }
     case NR_close: {
         if (is_nl_fd((int)a[0])) nl_close((int)a[0]);
+        if (is_qrtr_fd((int)a[0])) qrtr_close((int)a[0]);
         if (is_binder_fd((int)a[0])) binder_closed((int)a[0]);
         cg_closed((int)a[0]);
         if (a[0] < sizeof g_ashfd) g_ashfd[a[0]] = 0;
@@ -1473,6 +1502,14 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
         return 0;
     }
     case NR_socket: {
+        if (a[0] == 42 /*AF_QIPCRTR*/) {
+            int qv[2];
+            if (S4(NR_socketpair, 1 /*AF_UNIX*/, 2 /*SOCK_DGRAM*/ | (a[1] & 02004000), 0, (long)qv) == 0) {
+                qrtr_register(qv[0], qv[1]);
+                return qv[0];
+            }
+            return -24 /*EMFILE*/;
+        }
         // netlink: routing (protocol 0) is the phone's own while it lets an app have it — the kernel answers every
         // request, mostly with a refusal. The rest (uevents, nflog, netfilter, nl80211) is closed to an app: those
         // get a socket that answers by itself.

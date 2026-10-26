@@ -737,9 +737,34 @@ static int is_nl_fd(int fd) {
 static void nl_close(int fd) {
     for (int i = 0; i < MAX_NL; i++) {
         if (g_nl[i].fd == fd) {
-            if (g_nl[i].peer >= 0) S1(NR_close, g_nl[i].peer);
+if (g_nl[i].peer >= 0) S1(NR_close, g_nl[i].peer);
             g_nl[i].fd = 0;
             g_nl[i].peer = -1;
+        }
+    }
+}
+// QRTR (AF_QIPCRTR, 42): the QMI transport to the modem. The phone's kernel keeps the family to its own qrtr domain,
+// so a socket of it is refused to everything else ("socket(AF_QIPCRTR): Permission denied", which is what made
+// hlosminkdaemon give up and take MinkIPC - and with it iaware's task cleaner - down with it). There is no modem
+// behind this image and no QRTR bus to publish a name on, so the descriptor is one end of a socket pair: the calls
+// that open, bind and talk to it go through, and a service that waits for a peer waits for one that never comes.
+#define MAX_QRTR 8
+static struct { int fd, peer; } g_qrtr[MAX_QRTR];
+static void qrtr_register(int fd, int peer) {
+    for (int i = 0; i < MAX_QRTR; i++) {
+        if (!g_qrtr[i].fd) { g_qrtr[i].fd = fd; g_qrtr[i].peer = peer; return; }
+    }
+}
+static int is_qrtr_fd(int fd) {
+    for (int i = 0; i < MAX_QRTR; i++) if (g_qrtr[i].fd == fd) return 1;
+    return 0;
+}
+static void qrtr_close(int fd) {
+    for (int i = 0; i < MAX_QRTR; i++) {
+        if (g_qrtr[i].fd == fd) {
+            if (g_qrtr[i].peer >= 0) S1(NR_close, g_qrtr[i].peer);
+            g_qrtr[i].fd = 0;
+            g_qrtr[i].peer = -1;
         }
     }
 }
@@ -1432,6 +1457,9 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     }
     case NR_bind: case NR_connect:
         if (is_nl_fd((int)a[0])) return 0;
+        // QRTR: binding publishes a name on the modem's bus, connecting looks one up. Neither exists here, and the
+        // daemon only needs the call to come back without an error.
+        if (is_qrtr_fd((int)a[0])) return 0;
         if (a[1] && *(u16 *)a[1] == 16) {           // a real netlink socket: binding to groups is not for an app
             long r = S3(nr, a[0], a[1], a[2]);
             return r < 0 && nr == NR_bind ? 0 : r;
@@ -1471,6 +1499,7 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
     }
     case NR_close: {
         if (is_nl_fd((int)a[0])) nl_close((int)a[0]);
+        if (is_qrtr_fd((int)a[0])) qrtr_close((int)a[0]);
         if (is_binder_fd((int)a[0])) binder_closed((int)a[0]);
         cg_closed((int)a[0]);
         if (a[0] < sizeof g_ashfd) g_ashfd[a[0]] = 0;
@@ -1640,6 +1669,16 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
         // grace period (synchronizeKernelRCU) and take a refusal for a failed read; system_server dies of it. An
         // app may not have one: any descriptor does for a socket that is only closed.
         if (a[0] == 15 /*AF_KEY*/) return S4(NR_openat, AT_FDCWD, "/dev/null", 02000002 /*O_RDWR|O_CLOEXEC*/, 0);
+        // 42: QRTR, the modem's QMI bus. The kernel's qrtr domain is closed to every other domain, so socket() is
+        // refused (errno 13) and hlosminkdaemon stops there; the descriptor handed out here is one end of a pair.
+        if (a[0] == 42 /*AF_QIPCRTR*/) {
+            int qv[2];
+            if (S4(NR_socketpair, 1 /*AF_UNIX*/, 2 /*SOCK_DGRAM*/ | (a[1] & 02004000), 0, (long)qv) == 0) {
+                qrtr_register(qv[0], qv[1]);
+                return qv[0];
+            }
+            return -24 /*EMFILE*/;
+        }
         // 16: netd leaves when its routing rules are refused (RouteController::Init, "Permission denied" from the
         // phone's kernel). Nothing it asks of the routing tables can be done for an app: its routing socket
         // answers by itself too.
