@@ -39,6 +39,18 @@ object Sideload {
 
     private val ABI_DIRS = listOf("arm64-v8a", "arm64")
 
+    /**
+     * Android 17 (API 37) dropped CBS_init and the rest of OpenSSL 1.x's CBS_ API from the platform's libcrypto.
+     * An app that bundles its own OpenSSL but keeps the stock names libssl.so/libcrypto.so does not get its own copy:
+     * the loader already resolved those sonames to the platform's, the bundled libssl.so binds to the platform
+     * libcrypto.so, and the first CBS_ symbol it imports cannot be found - dlopen fails with
+     * "cannot locate symbol "CBS_init"" and any native library that pulls in TLS goes with it. That is what kept
+     * Bili from starting. The bundled pair is complete on its own, so the fix is to give it private sonames: a
+     * same-length byte patch inside .dynstr, no offsets move, the libraries keep working among themselves and stop
+     * colliding with the platform.
+     */
+    private val PRIVATE_SONAMES = listOf("libcrypto.so" to "bk_crypto.so", "libssl.so" to "bk_ssl.so")
+
     data class Outcome(val ok: Boolean, val packageName: String?, val dir: String?, val libs: Int, val message: String)
 
     /**
@@ -183,8 +195,8 @@ object Sideload {
 
         // the libraries: the apk keeps them deflated, and on a system partition nothing would extract them
         var libs = 0
+        val libDir = File(dir, "lib/arm64")
         runCatching {
-            val libDir = File(dir, "lib/arm64")
             ZipFile(apk).use { z ->
                 for (abi in ABI_DIRS) {
                     val prefix = "lib/$abi/"
@@ -200,9 +212,74 @@ object Sideload {
                 }
             }
         }.onFailure { log("sideload: libraries: ${it.message}") }
+        if (libs > 0) runCatching { privateSonames(libDir) }.onFailure { log("sideload: sonames: ${it.message}") }
 
         log("sideload: $pkg → ${dir.relativeTo(root).path} ($libs native libraries)")
         return Outcome(true, pkg, dir.relativeTo(root).path, libs, "placed $pkg")
+    }
+
+    /**
+     * Rewrite the bundled OpenSSL sonames, so the loader stops matching them against the platform's libraries of the
+     * same name. Every replacement is the same length (libcrypto.so -> bk_crypto.so, libssl.so -> bk_ssl.so), so the
+     * patch is a byte-for-byte swap inside .dynstr: no offset in the file moves, no section or program header has to
+     * be rebuilt, and the libraries keep resolving each other. Files are renamed to match so the directory tells the
+     * truth, and the originals are dropped - nothing in the set references them any more.
+     */
+    private fun privateSonames(libDir: File) {
+        var hit = 0
+        for (f in libDir.listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".so") }) {
+            val bytes = runCatching { f.readBytes() }.getOrNull() ?: continue
+            var out = bytes
+            for ((from, to) in PRIVATE_SONAMES) {
+                out = replaceString(out, from, to)
+            }
+            if (out === bytes || out.contentEquals(bytes)) continue
+            runCatching {
+                f.writeBytes(out)
+                f.setReadable(true, false)
+                hit++
+            }
+        }
+        if (hit == 0) return
+        for ((from, to) in PRIVATE_SONAMES) {
+            val src = File(libDir, from)
+            if (src.isFile) runCatching {
+                val dst = File(libDir, to)
+                if (dst.exists()) dst.delete()
+                src.delete()
+            }
+        }
+        log("sideload: gave the bundled OpenSSL private sonames ($hit files) - the platform's libcrypto is not OpenSSL 1.x any more")
+    }
+
+    /** Same-length, NUL-terminated replacement of a soname inside the file's .dynstr. */
+    private fun replaceString(data: ByteArray, from: String, to: String): ByteArray {
+        val a = (from + "\u0000").toByteArray(Charsets.ISO_8859_1)
+        val b = (to + "\u0000").toByteArray(Charsets.ISO_8859_1)
+        if (a.size != b.size) return data
+        var out: ByteArray? = null
+        var i = 0
+        while (i <= data.size - a.size) {
+            var match = true
+            for (k in a.indices) if (data[i + k] != a[k]) { match = false; break }
+            if (!match) { i++; continue }
+            val arr = out ?: data.copyOf().also { out = it }
+            System.arraycopy(b, 0, arr, i, b.size)
+            i += a.size
+        }
+        return out ?: data
+    }
+
+    /**
+     * Re-apply the soname fix to packages that were already in the image before it existed. Runs at start, is a
+     * no-op once every .so has been rewritten, so it costs a directory listing on a healthy image.
+     */
+    fun fixSonames(root: File) {
+        for (d in placed(root)) {
+            val libDir = File(d, "lib/arm64")
+            if (!libDir.isDirectory) continue
+            runCatching { privateSonames(libDir) }.onFailure { log("sideload: sonames in ${d.name}: ${it.message}") }
+        }
     }
 
     /** Directories this object created in the image, for removal. */

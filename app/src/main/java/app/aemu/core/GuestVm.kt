@@ -1174,6 +1174,9 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
     private fun disableBrokenComponents() {
         // MagicOS (Honor): a set of vendor services reach the TEE, which a container has no way to provide
         disableHonorTeeComponents()
+        // a sideloaded app that bundles OpenSSL keeps colliding with the platform's libcrypto, which stopped being
+        // OpenSSL 1.x: give its copy private sonames so it loads at all
+        runCatching { Sideload.fixSonames(paths.root) }
         if (img.api !in 9..16) return
         val marker = File(paths.root, "data/.aemu-components-disabled2")
         if (marker.isFile) return
@@ -1208,7 +1211,8 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
         val list = listOf(
             "com.hihonor.securityserver/.service.HnAntiTheftDetectionService",
             "com.hihonor.securityserver/.safetyctrl.SafetyCtrlService",
-            "com.hihonor.securityserver/.service.HnUniKeystoreService",
+            "com.hihonor.securityserver/.HwUniKeystoreService",
+            "com.hihonor.securityserver/.scenerecommend.HealthSceneRecommendService",
             "com.hihonor.nearby/com.hihonor.duallink.service.DualLinkService",
             "com.hihonor.nearby/com.hihonor.hwddmp.service.DeviceMonitorService",
             "com.hihonor.nearby/.NearbyService",
