@@ -483,27 +483,29 @@ class VmActivity : ComponentActivity() {
         recorder = r; recOn.value = true
     }
 
-    // APK picked on the host: copied into the shared card folder, then installed by the guest's package manager
+    // APK picked on the host: put on a system partition of the image, where the package manager's own boot scan
+    // registers it (see Sideload). The old route — copy to the shared card, then `pm install` inside the guest —
+    // depended on PackageInstaller, installd and dex2oat all working under the translator and on a correct rewrite of
+    // the binary (ABX) data/system/packages.xml; it failed on images where any of those did not.
     private val pickApk = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@registerForActivityResult
-        val dir = app.aemu.core.Sdcard.hostDir(vm.paths)
-        if (dir == null) { toast(getString(R.string.m_failed)); return@registerForActivityResult }
         toast(getString(R.string.m_install_apk_start))
         thread {
-            val ok = runCatching {
-                val f = java.io.File(dir, "aemu-install.apk")
-                contentResolver.openInputStream(uri)!!.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
-                // the shared card lives on /storage/emulated/0 under the media provider: the file is owned by the
-                // host's media_rw group and mode 0660, which the app's uid cannot read. The guest's package manager
-                // opens it through the engine (the app's uid), so the file must be world-readable: without it every
-                // install dies inside the PM binder call with "Failure opening /sdcard/aemu-install.apk".
-                f.setReadable(true, false)
-                f.setWritable(true, true)
+            val tmp = java.io.File(cacheDir, "aemu-install.apk")
+            val copied = runCatching {
+                contentResolver.openInputStream(uri)!!.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } }
             }.isSuccess
-            if (!ok) { toast(getString(R.string.m_failed)); return@thread }
-            val out = runCatching { vm.guestShell("pm install -r " + vm.img.sdcardPath.trimEnd('/') + "/aemu-install.apk", 300_000) }.getOrElse { it.toString() }
+            if (!copied) { toast(getString(R.string.m_failed)); return@thread }
+            val r = app.aemu.core.Sideload.place(vm.paths.root, tmp, vm::log)
+            runCatching { tmp.delete() }
+            if (!r.ok) { toast(r.message.take(200)); return@thread }
+            // the package scan happens at boot: the app appears once the guest has restarted
             runCatching { app.aemu.core.TreeFixer(this@VmActivity, vm.paths, vm.img, vm::log).seedOwners() }
-            toast(out.trim().lines().lastOrNull { it.isNotBlank() }?.take(200) ?: getString(R.string.m_failed))
+            if (vm.state == app.aemu.core.GuestVm.State.RUNNING) {
+                toast(getString(R.string.m_install_apk_reboot, r.packageName ?: ""))
+            } else {
+                toast(getString(R.string.m_install_apk_done, r.packageName ?: ""))
+            }
         }
     }
 

@@ -172,6 +172,8 @@
     <string name="vs_fulldex_sub">ART переводит приложения в машинный код: первый запуск и установка намного дольше, приложения работают быстрее</string>
     <string name="m_install_apk">Установить APK…</string>
     <string name="m_install_apk_start">Установка…</string>
+    <string name="m_install_apk_done">%1$s размещён — появится при запуске виртуальной машины</string>
+    <string name="m_install_apk_reboot">%1$s размещён — перезапустите виртуальную машину</string>
     <string name="m_device">Состояние устройства</string>
     <string name="m_airplane">Режим полёта</string>
     <string name="m_stay_awake">Не гасить экран</string>

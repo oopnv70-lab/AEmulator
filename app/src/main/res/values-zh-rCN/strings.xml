@@ -174,6 +174,8 @@
     <string name="vmos_preset_lite">轻量 / 低内存</string>
     <string name="m_install_apk">安装 APK…</string>
     <string name="m_install_apk_start">正在安装…</string>
+    <string name="m_install_apk_done">%1$s 已放置，虚拟机启动后可用</string>
+    <string name="m_install_apk_reboot">%1$s 已放置，重启虚拟机后可用</string>
     <string name="m_device">设备状态</string>
     <string name="m_airplane">飞行模式</string>
     <string name="m_stay_awake">保持屏幕常亮</string>
