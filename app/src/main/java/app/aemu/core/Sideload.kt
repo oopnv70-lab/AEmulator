@@ -243,11 +243,16 @@ object Sideload {
         if (hit == 0) return
         for ((from, to) in PRIVATE_SONAMES) {
             val src = File(libDir, from)
-            if (src.isFile) runCatching {
+            if (!src.isFile) continue
+            runCatching {
                 val dst = File(libDir, to)
                 if (dst.exists()) dst.delete()
-                src.delete()
-            }
+                if (!src.renameTo(dst)) {
+                    dst.writeBytes(src.readBytes())
+                    src.delete()
+                }
+                dst.setReadable(true, false)
+            }.onFailure { log("sideload: rename $from -> $to: ${it.message}") }
         }
         log("sideload: gave the bundled OpenSSL private sonames ($hit files) - the platform's libcrypto is not OpenSSL 1.x any more")
     }
