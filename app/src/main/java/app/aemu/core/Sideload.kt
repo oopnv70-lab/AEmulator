@@ -21,7 +21,7 @@ import java.util.zip.ZipFile
  * So an APK is "installed" by putting it where the scan will find it:
  *
  *     <root>/system/app/<Dir>/<Dir>.apk
- *     <root>/system/app/<Dir>/lib/arm64/<every lib/arm64-v8a/*.so, extracted>
+ *     <root>/system/app/<Dir>/lib/arm64/<every lib/arm64-v8a/…so, extracted>
  *
  * The native libraries must be extracted by us: the APK keeps them deflated (`extractNativeLibs=true`), and on a
  * system partition nothing would decompress them — installd is not involved, and there is no per-package lib dir to
@@ -111,17 +111,27 @@ object Sideload {
             if (p < 0 || p >= x.size) { out.add(""); continue }
             if (utf8) {
                 // utf16 length (skipped), then the utf8 byte length, each 1 or 2 bytes
-                var c = x[p++].toInt() and 0xff
-                if (c and 0x80 != 0) p++
-                c = x[p++].toInt() and 0xff
+                var c = x[p].toInt() and 0xff
+                p += 1
+                if (c and 0x80 != 0) p += 1
+                if (p >= x.size) { out.add(""); continue }
+                c = x[p].toInt() and 0xff
+                p += 1
                 var len = c
-                if (c and 0x80 != 0) len = ((c and 0x7f) shl 8) or (x[p++].toInt() and 0xff)
+                if (c and 0x80 != 0) {
+                    if (p >= x.size) { out.add(""); continue }
+                    len = ((c and 0x7f) shl 8) or (x[p].toInt() and 0xff)
+                    p += 1
+                }
                 if (len < 0 || p + len > x.size) { out.add(""); continue }
                 out.add(String(x, p, len, Charsets.UTF_8))
             } else {
                 var len = b.getShort(p).toInt() and 0xffff
                 p += 2
-                if (len and 0x8000 != 0) { len = ((len and 0x7fff) shl 16) or (b.getShort(p).toInt() and 0xffff); p += 2 }
+                if (len and 0x8000 != 0) {
+                    len = ((len and 0x7fff) shl 16) or (b.getShort(p).toInt() and 0xffff)
+                    p += 2
+                }
                 if (len < 0 || p + len * 2 > x.size) { out.add(""); continue }
                 out.add(String(x, p, len * 2, Charsets.UTF_16LE))
             }
