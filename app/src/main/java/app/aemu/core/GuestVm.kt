@@ -744,8 +744,46 @@ class GuestVm(val ctx: Context, val img: GuestImage) {
     /** guest files this kernel ships (asset names) */
     private val engineFiles: Set<String> by lazy { listOf("engines/n64-${kernel.tag}", kernel.gsiAssets).flatMap { runCatching { EngineAssets.list(ctx, it) }.getOrNull().orEmpty().asList() }.toSet() }
 
+    /**
+     * The 32-bit side of the guest: its own qemu-arm, and a 32-bit app_process for the secondary zygote to run.
+     * Both must be here for the guest to declare armeabi-v7a at all.
+     *
+     * A firmware that is 64-bit only says so, though, and then it is not the engine's business to add a 32-bit ABI
+     * back: with one declared, the package manager settles the system WebView on armeabi-v7a (android:use32bitAbi),
+     * its renderers ask for the 32-bit zygote, and that one cannot run under the translator. The ABI list is the
+     * firmware's own statement about its device - a phone that ships zygote64 only, with an empty abilist32, has no
+     * 32-bit programs to run - so it is read here and honoured.
+     */
     private val n64Has32: Boolean get() = paths.nativeBin("libqemu_arm.so").canExecute() &&
-            File(paths.root, "system/bin/app_process32").isFile
+            File(paths.root, "system/bin/app_process32").isFile &&
+            firmwareDeclares32Abi
+
+    /**
+     * What the firmware says about 32-bit ABIs, by the rule init of 10+ uses: ro.product.<x> comes from the first
+     * partition of ro.product.property_source_order that has ro.<partition>.product.<x> (the default order being
+     * product,product_services,odm,vendor,system). An empty abilist32 is a statement, not a missing value: it is
+     * what a 64-bit-only device carries. When the firmware says nothing at all, the engine keeps its old answer.
+     */
+    private val firmwareDeclares32Abi: Boolean by lazy {
+        val files = listOf("product/etc/build.prop", "product/build.prop", "product_services/etc/build.prop",
+            "product_services/build.prop", "odm/etc/build.prop", "odm/build.prop", "vendor/default.prop",
+            "vendor/build.prop", "system_ext/etc/build.prop", "system_ext/build.prop",
+            "system/build.prop", "system/etc/prop.default")
+        val props = LinkedHashMap<String, String>()
+        for (n in files) runCatching {
+            File(paths.root, n).takeIf { it.isFile }?.let { f -> PropArea.parseProps(f.readText()).forEach { (k, v) -> props.putIfAbsent(k, v) } }
+        }
+        val order = (props["ro.product.property_source_order"] ?: "product,product_services,odm,vendor,system")
+            .split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        val said = order.firstNotNullOfOrNull { p -> props["ro.$p.product.cpu.abilist32"] }
+        when {
+            // "abilist32=" (empty) is the statement of a 64-bit-only device, not a missing value
+            said != null -> said.isNotEmpty()
+            // no partition said anything: a plain abilist that lists no 32-bit ABI is just as clear
+            else -> props["ro.product.cpu.abilist"]?.split(',')
+                ?.any { it.trim().isNotEmpty() && it.trim() != "arm64-v8a" } ?: true
+        }
+    }
 
     val glInApp: Boolean get() = engine == Engine.KK && GlBridge.running()
 
