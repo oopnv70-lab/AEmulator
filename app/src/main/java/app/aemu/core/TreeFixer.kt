@@ -119,6 +119,7 @@ class TreeFixer(
         parkQtiCameraProvider()
         parkQtiAudioHal()
         pointSensorsAtDefaultHal()
+        addCodec2VideoLists()
         swapMtkAudioHal()
         eglConfig(img.settings.gpu)
         makeDataDirs()
@@ -413,6 +414,29 @@ class TreeFixer(
             .any { File(root, "$it/$want").isFile }
         if (!hasDefault) return
         runCatching { conf.writeText("$want\n") }.onSuccess { log("sensors: hals.conf -> $want (was ${cur.ifEmpty { "empty" }})") }
+    }
+
+    /**
+     * MagicOS 17 (API 37): vendor/etc/media_codecs.xml is the AOSP template, and it includes only the OMX lists
+     * (media_codecs_google_video.xml and friends). This system has no OMX software decoders any more - the codec
+     * store reports no components and the OMX names resolve to nothing - so video never decodes: a player gets
+     * audio (those go through Codec2, which the APEX lists on its own) but no picture. The firmware ships the
+     * Codec2 lists next to the template (media_codecs_google_c2*.xml), simply not referenced. Add the includes: the
+     * software decoders of the swcodec APEX (c2.android.avc/hevc/vp8/vp9/av1) then become visible.
+     */
+    private fun addCodec2VideoLists() {
+        if (engine != Engine.N64) return
+        val etc = File(root, "vendor/etc")
+        val main = File(etc, "media_codecs.xml")
+        if (!main.isFile) return
+        val c2 = listOf("media_codecs_google_c2.xml", "media_codecs_google_c2_audio.xml", "media_codecs_google_c2_video.xml")
+        if (c2.any { !File(etc, it).isFile }) return
+        val text = runCatching { main.readText() }.getOrDefault("")
+        if (text.contains("media_codecs_google_c2")) return
+        if (!text.contains("</MediaCodecs>")) return
+        val added = c2.joinToString("") { "    <Include href=\"$it\" />\n" }
+        val out = text.replace("</MediaCodecs>", added + "</MediaCodecs>")
+        runCatching { main.writeText(out) }.onSuccess { log("media codecs: Codec2 software lists added to media_codecs.xml") }
     }
 
     /** Native arm64 engine: its HALs and libraries are arm64 files from assets/engines/n64-<kernel> (each kernel has its own copy), named "a#b#c" for a/b/c. */
