@@ -98,6 +98,7 @@ static int g_ruid, g_rgid;      // ...and its real ones
 static u32 g_real_uid;
 static char g_qemu[512];        // qemu-arm for the firmware's 32-bit programs (AEMU64_QEMU)
 static int g_crash;
+static int g_crashseen;             // AEMU64_CRASH=1: the full report is written once per process only
 static u64 g_logdev, g_logino;      // the service log on descriptor 2 (a file or a pipe to the app)
 static int g_logpipe;
 static u64 g_inino;                 // ...and the pipe on descriptor 0
@@ -1695,19 +1696,27 @@ static void on_crash(int sig, void *info, void *uc) {
         if (nfp <= fp) break;
         fp = nfp;
     }
-    S1(NR_exit_group, 128 + sig);
+    // The report is finished, but this is not necessarily the end of the process: with AEMU64_CRASH=1 the guest's
+    // own handler still runs afterwards (see fatal_relay). A Java null dereference is one SIGSEGV with the
+    // implicit null check as pc, and ART's fault handler turns it into a NullPointerException and carries on.
+    if (g_sayfd >= 0) { S1(NR_close, (u64)g_sayfd); g_sayfd = -1; }
+    __atomic_store_n(&busy, 0, __ATOMIC_RELEASE);
 }
-
 // Fatal signals: the kernel always calls fatal_relay; the guest's own handler (ART's fault handler, the linker's
 // debuggerd hook) runs from it with the flags and mask it asked for. Only when the guest has nothing left
 // (SIG_DFL) the crash is reported here, on the program's stderr, with the mappings of pc and the callers.
 static void fatal_relay(int sig, void *info, void *uc) {
-    if (g_crash) {
+    void (*h)(int, void *, void *) = g_fatal[sig & 31];
+    if (g_crash && !g_crashseen) {
+        // Report first, then behave exactly as without the switch. Exiting here would kill the process on every
+        // SIGSEGV the guest expects to survive (ART's implicit null checks), which looks like a real crash.
+        g_crashseen = 1;
         on_crash(sig, info, uc);
+        if ((u64)h > 1) h(sig, info, uc); else S1(NR_exit_group, 128 + sig);
+        if (g_is32) *(u64 *)((char *)uc + 40) &= ~SYSBIT;
         return;
     }
-    void (*h)(int, void *, void *) = g_fatal[sig & 31];
-    if ((u64)h > 1) h(sig, info, uc); else on_crash(sig, info, uc);
+if ((u64)h > 1) h(sig, info, uc); else on_crash(sig, info, uc);
     if (g_is32) *(u64 *)((char *)uc + 40) &= ~SYSBIT;
 }
 
