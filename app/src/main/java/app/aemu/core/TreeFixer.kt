@@ -118,6 +118,7 @@ class TreeFixer(
         parkQcomServices()
         parkQtiCameraProvider()
         parkQtiAudioHal()
+        pointSensorsAtDefaultHal()
         swapMtkAudioHal()
         eglConfig(img.settings.gpu)
         makeDataDirs()
@@ -392,6 +393,26 @@ class TreeFixer(
             if (dst.exists()) ImageStore.wipe(dst)
             if (f.renameTo(dst)) log("QTI AIDL audio HAL set aside (${f.name})")
         }
+    }
+
+    /**
+     * Honor MagicOS 17 (API 37): vendor/etc/sensors/hals.conf names sensors.qsh.so, the client of Qualcomm's SSC
+     * (SLPI) sensor DSP. There is no such DSP here, so the multihal service loads that library, fails to reach it and
+     * dies with SIGABRT (LOG(FATAL) in libbase, reported as exit code 127); its rc restarts it. Point hals.conf at
+     * the engine's own sensors.default.so, which is already installed next to it: the service then stays up (it
+     * still fails a few times while starting, then settles).
+     */
+    private fun pointSensorsAtDefaultHal() {
+        if (engine != Engine.N64) return
+        val conf = File(root, "vendor/etc/sensors/hals.conf")
+        if (!conf.isFile) return
+        val want = "sensors.default.so"
+        val cur = runCatching { conf.readText().trim() }.getOrDefault("")
+        if (cur == want) return
+        val hasDefault = listOf("vendor/lib64/hw", "system/lib64/hw")
+            .any { File(root, "$it/$want").isFile }
+        if (!hasDefault) return
+        runCatching { conf.writeText("$want\n") }.onSuccess { log("sensors: hals.conf -> $want (was ${cur.ifEmpty { "empty" }})") }
     }
 
     /** Native arm64 engine: its HALs and libraries are arm64 files from assets/engines/n64-<kernel> (each kernel has its own copy), named "a#b#c" for a/b/c. */
